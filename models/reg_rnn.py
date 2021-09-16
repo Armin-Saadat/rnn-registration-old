@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 
-from source_code.conv_lstm import ConvLSTM
-from source_code.unet import Unet
-from source_code.spatial_transform import SpatialTransformer
+from models.conv_lstm import ConvLSTM
+from models.unet import Unet
+from utils.spatial_transform import SpatialTransformer
 
 
 class REG_RNN(nn.Module):
