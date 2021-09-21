@@ -41,7 +41,9 @@ class Unet_LSTM(nn.Module):
         assert unet_out.shape[1] == 1, "batch-size must be one"
 
         # shape of convs_out: (39, 2, 32, 32)
-        convs_out = self.convs(unet_out.squeeze(1)).unsqueeze(1)
+        convs_out = unet_out.squeeze(1)
+        for conv in self.convs:
+            convs_out = conv(convs_out)
 
         # shape of rnn_out: (39, bs, 2*32*32)
         rnn_out, (h1, c1) = self.rnn(convs_out.view(39, 1, -1))
