@@ -15,29 +15,39 @@ class Unet_LSTM(nn.Module):
         dec_nf = [32, 32, 32, 32, 32, 16, 16]
         self.unet = Unet(inshape=image_size, infeats=2, nb_features=[enc_nf, dec_nf])
 
-        # configure unet to flow field layer
-        Conv = getattr(nn, 'Conv%dd' % self.ndims)
-        self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1)
+        convs = []
+        convs.append(nn.Conv2d(self.unet.final_nf, 8, kernel_size=32, padding=0))
+        convs.append(nn.Conv2d(8, 4, kernel_size=32, padding=0))
+        convs.append(nn.Conv2d(4, 2, kernel_size=32, padding=0))
+        for i in range(4):
+            convs.append(nn.Conv2d(2, 2, kernel_size=32, padding=0))
+        convs.append(nn.Conv2d(2, 2, kernel_size=8, padding=0))
+        self.convs = nn.ModuleList(convs)
 
-        # features: H * w * 2 (for x and y in flow)
-        features_num = image_size[0] * image_size[1] * 2
-        self.rnn = nn.LSTM(input_size=features_num, hidden_size=features_num, batch_first=False)
+        self.rnn = nn.LSTM(input_size=32 * 32 * 2, hidden_size=32 * 32 * 2, batch_first=False)
+
+        self.fc = nn.Linear(2 * 32 * 32, 2 * 256 * 256)
+
         self.spatial_transformer = SpatialTransformer(size=image_size)
 
     def forward(self, images, labels=None):
 
-        # shape of imgs/lbs: (seq_len, bs, 1, W, H)
-        # shape of unet_out: (seq_len - 1, bs, 2, W, H)
+        # shape of imgs/lbs: (40, bs, 1, 256, 256)
+        # shape of unet_out: (39, bs, 16, 256, 256)
         unet_out = torch.cat(
-            [self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0)
+            [self.unet(torch.cat([src, trg], dim=1)).unsqueeze(0)
              for src, trg in zip(images[:-1], images[1:])], dim=0)
 
-        # shape of rnn_out: (seq_len - 1, bs, H*W*2)
-        seq, bs, C, W, H = unet_out.shape
-        rnn_out, (h1, c1) = self.rnn(unet_out.view(seq, bs, -1))
+        assert unet_out.shape[1] == 1, "batch-size must be one"
 
-        # shape of flows: (seq_len - 1, bs, 2, W, H)
-        flows = rnn_out.view(seq, bs, C, W, H)
+        # shape of convs_out: (39, 2, 32, 32)
+        convs_out = self.convs(unet_out.squeeze(1)).unsqueeze(1)
+
+        # shape of rnn_out: (39, bs, 2*32*32)
+        rnn_out, (h1, c1) = self.rnn(convs_out.view(39, 1, -1))
+
+        # shape of flows: (39, bs, 2, 256, 256)
+        flows = self.fc(rnn_out.view(39, -1)).view(39, 1, 2, 256, 256)
 
         # shape of moved_images = (seq_len - 1, bs, 1, W, H)
         moved_images = torch.cat(
