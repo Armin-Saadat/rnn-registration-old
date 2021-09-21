@@ -13,16 +13,16 @@ class Unet_LSTM(nn.Module):
 
         enc_nf = [16, 32, 32, 32]
         dec_nf = [32, 32, 32, 32, 32, 16, 16]
-        self.unet = Unet(inshape=image_size, infeats=2, nb_features=[enc_nf, dec_nf]).to('cuda')
+        self.unet = Unet(inshape=image_size, infeats=2, nb_features=[enc_nf, dec_nf])
 
         # configure unet to flow field layer
         Conv = getattr(nn, 'Conv%dd' % self.ndims)
-        self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1).to('cuda')
+        self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1)
 
         # features: H * w * 2 (for x and y in flow)
         features_num = image_size[0] * image_size[1] * 2
-        self.rnn = nn.LSTM(input_size=features_num, hidden_size=features_num, batch_first=False).to('cuda')
-        self.spatial_transformer = SpatialTransformer(size=image_size).to('cuda')
+        self.rnn = nn.LSTM(input_size=features_num, hidden_size=features_num, batch_first=False)
+        self.spatial_transformer = SpatialTransformer(size=image_size)
 
     def forward(self, images, labels=None):
 

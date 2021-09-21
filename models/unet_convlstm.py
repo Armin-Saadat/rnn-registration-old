@@ -14,14 +14,14 @@ class Unet_ConvLSTM(nn.Module):
 
         enc_nf = [16, 32, 32, 32]
         dec_nf = [32, 32, 32, 32, 32, 16, 16]
-        self.unet = Unet(inshape=image_size, infeats=2, nb_features=[enc_nf, dec_nf]).to('cuda')
+        self.unet = Unet(inshape=image_size, infeats=2, nb_features=[enc_nf, dec_nf])
 
         # configure unet to flow field layer
         Conv = getattr(nn, 'Conv%dd' % self.ndims)
-        self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1).to('cuda')
+        self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1)
 
-        self.rnn = ConvLSTM(input_dim=2, hidden_dim=2, kernel_size=(3, 3), num_layers=1, batch_first=False).to('cuda')
-        self.spatial_transformer = SpatialTransformer(size=image_size).to('cuda')
+        self.rnn = ConvLSTM(input_dim=2, hidden_dim=2, kernel_size=(3, 3), num_layers=1, batch_first=False)
+        self.spatial_transformer = SpatialTransformer(size=image_size)
 
     def forward(self, images, labels=None):
 
