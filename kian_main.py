@@ -5,7 +5,6 @@ import numpy as np
 import time
 import os
 import neurite as ne
-from models.reg_rnn import REG_RNN
 from utils import losses
 import shutil
 import pickle
@@ -15,30 +14,22 @@ import random
 # ______ ARGS ______ #
 class Args():
     def __init__(self):
-        self.model_id = '6'
-        self.saving_base = '/HDD/kian/rnn-registration/saved-models/'
+        self.model_id = '3'
+        self.saving_base = '/HDD/kian/saved-models/DIR1/'
         self.model_dir = f'{self.saving_base}{self.model_id}/'
-        self.train_mode = 'default (check 1e-4 lr) int_downsize=1'
-#         self.supix_file_name = '/HDD/vxm-models/structured-data/filtered_labelMatched_lb85.pkl'
-#         self.supix_top = None
-#         self.supix_thr = None
-        self.lr = 1e-4
-        self.epochs = 400
+        self.train_mode = 'default to check the problem solved?!'
+        self.lr = 1e-3
+        self.epochs = 600
         self.batch_size = 1
         self.smooth_weight = 0.01
         self.seg_weight = 0
         self.loss = 'mse'      
-        self.load_model = None
+        self.load_model = None #'/HDD/kian/saved-models/32/0499.pt'
         self.initial_epoch = 0  # to start from
-#         self.int_steps = 7      # check 0
-        self.int_downsize = 1  # check 0
-        self.save_every = 50
-        
-        self.wait = 0
-
+        self.save_every = 100
+        self.wait = 1
 
         assert self.loss == 'mse' or self.loss == 'ncc'
-
         for obj in os.listdir(self.saving_base):
             if obj == str(self.model_id):
                 raise Exception(f'ID Error: model with ID {self.model_id} already exists in {self.model_dir}')
@@ -48,9 +39,6 @@ class Args():
     def save(self):
         model_info =  f'\n___ Model Info: ID{self.model_id} ___\n'
         model_info += f'train_mode:     {self.train_mode}\n'
-#         model_info += f'supix_top:      {self.supix_top} '
-#         model_info += f'supix_thr:      {self.supix_thr} \n'
-#         model_info += f'supix_file:     {self.supix_file_name}\n'
         model_info += f'___ model_dir:  {self.model_dir} ___\n\n'
         model_info += f'lr:             {self.lr}\n'
         model_info += f'epochs:         {self.epochs}\n'
@@ -60,8 +48,6 @@ class Args():
         model_info += f'loss:           {self.loss}\n'
         model_info += f'load_model:     {self.load_model}\n'
         model_info += f'initial epoch:  {self.initial_epoch}\n'
-#         model_info += f'int_steps:      {self.int_steps}\n'
-        model_info += f'int_downsize:   {self.int_downsize}\n'
         model_info += f'save_every:     {self.save_every}\n'
         print(model_info)
 
@@ -71,6 +57,57 @@ class Args():
 
 args = Args()
 args.save()
+
+
+import torch
+import torch.nn as nn
+from models.unet_convlstm import Unet_ConvLSTM
+from models.unet import Unet
+from models.conv_lstm import ConvLSTM
+from utils.spatial_transform import SpatialTransformer
+
+class Unet_ConvLSTM(nn.Module):
+    def __init__(self, image_size):
+        super(Unet_ConvLSTM, self).__init__()
+        self.image_size = image_size
+        self.ndims = len(image_size)
+
+        enc_nf = [16, 32, 32, 32]
+        dec_nf = [32, 32, 32, 32, 32, 16, 16]
+        self.unet = Unet(inshape=image_size, infeats=2, nb_features=[enc_nf, dec_nf])
+
+        # configure unet to flow field layer
+        Conv = getattr(nn, 'Conv%dd' % self.ndims)
+        self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1)
+
+        self.rnn = ConvLSTM(input_dim=2, hidden_dim=2, kernel_size=(3, 3), num_layers=1, batch_first=False)
+        self.spatial_transformer = SpatialTransformer(size=image_size)
+
+    def forward(self, images, labels=None):
+
+        # shape of imgs/lbs: (seq_size, bs, 1, W, H)
+        # shape of unet_out: (seq_size - 1, bs, 2, W, H)
+        
+        st_pack = zip(images[:-1] + images[1:], images[1:] + images[:-1])
+        unet_out = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in st_pack], dim=0)
+
+        rnn_out, last_states = self.rnn(unet_out)
+        h, c = last_states[0]
+
+        # shape of flows: (seq_size - 1, bs, 2, W, H)
+        flows = rnn_out[0].permute(1, 0, 2, 3, 4)
+
+        # shape of moved_images = (seq_size - 1, bs, 1, W, H)
+        moved_images = torch.cat(
+            [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(images[:-1] + images[1:], flows[:])], dim=0)
+
+        if labels is not None:
+            moved_labels = torch.cat(
+                [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(labels[:-1] + labels[1:], flows[:])], dim=0)
+            return [moved_images, moved_labels, flows]
+        else:
+            return [moved_images, flows]
+
 
 
 
@@ -93,8 +130,7 @@ if server:
     for ind, img in pre_labels.items():
         inp = torch.from_numpy(img)
         p_inp = torch.nn.functional.pad(inp, pad=(0, 0, 0, 0, 0, 40 - inp.shape[0]), mode='constant', value=0)
-        labels.append(p_inp)
-        
+        labels.append(p_inp)    
 else:  
     with open('./data/images', 'rb') as f:
         images = pickle.load(f)
@@ -115,7 +151,6 @@ for i, lb in enumerate(labels):
 # ____ Dataloader ____ #
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
-
 
 class Dataset_(Dataset):
     def __init__(self, images, labels):
@@ -140,10 +175,16 @@ def get_dataloader(images, labels, batch_size, shuffle=False, pin_memory=False, 
 dataloader = get_dataloader(images, labels, args.batch_size)
 
 
+
 # _____ Model _____ #
-model = REG_RNN(dataloader.dataset.image_size)
+model = Unet_ConvLSTM(dataloader.dataset.image_size)
 model.to('cuda')
 _ = model.train()
+
+if args.load_model:
+    print(f'\nloading model from {args.load_model}')
+    model.load_state_dict(torch.load(args.load_model))
+    print('\nloaded\n')
 
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -154,7 +195,7 @@ elif args.loss == 'mse':
 else:
     raise ValueError('Image loss should be "mse" or "ncc", but found "%s"' % args.image_loss)
 
-smooth_loss_func = losses.Grad('l2', loss_mult=args.int_downsize).loss
+smooth_loss_func = losses.Grad('l2').loss
 smooth_weight = args.smooth_weight
 
 seg_loss_func = losses.MSE().loss
@@ -169,7 +210,7 @@ loss_history, all_metrics = [], []
 for epoch in range(args.initial_epoch, args.epochs):
     time.sleep(args.wait)
     # save model checkpoint
-    if epoch % args.save_every == 0:
+    if (epoch+1) % args.save_every == 0:
         torch.save(model.state_dict(), os.path.join(args.model_dir, '%04d.pt' % epoch))
         with open(f'{args.model_dir}train_metrics.json', 'w+') as outfile:
             json.dump(all_metrics, outfile)
@@ -183,31 +224,29 @@ for epoch in range(args.initial_epoch, args.epochs):
 
     for d_idx, data in enumerate(dataloader):
         
+        # shape of imgs/lbs: (bs, seq_size, W, H) --> (seq_size, bs, 1, W, H)
+        # shape of moved_imgs/moved_labes: (seq_size - 1, bs, 1, W, H)
+        # shape of flows: (seq_size - 1, bs, 2, W, H)
+        
         imgs, lbs = data
         bs = imgs.shape[0]
 
-        # shape of imgs/lbs: (bs, seq_size, W, H) --> (seq_size, bs, 1, W, H)
         imgs = imgs.permute(1, 0, 2, 3).unsqueeze(2).to('cuda')
         lbs = lbs.permute(1, 0, 2, 3).unsqueeze(2).to('cuda')
 
-        # shape of moved_imgs/moved_labes: (seq_size - 1, bs, 1, W, H)
-        # shape of flows: (seq_size - 1, bs, 2, W, H)
         moved_imgs, moved_lbs, flows = model(imgs, lbs)
         
-        # calculate loss
         loss = 0
         for i in range(bs):
             sim_loss = sim_loss_func(imgs[1:, i], moved_imgs[:, i])
             smooth_loss = smooth_loss_func(zero_phi, flows[:, i])
             seg_loss = seg_loss_func(lbs[1:, i], moved_lbs[:, i])
-            loss = sim_loss + (smooth_weight * smooth_loss) + (seg_weight * seg_loss)
+            loss += sim_loss + (smooth_weight * smooth_loss) + (seg_weight * seg_loss)
 
-        # backpropagate and optimize
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         
-        # update epoch loss
         epoch_loss += loss * bs
         epoch_loss_sim += sim_loss * bs
         epoch_loss_smooth += smooth_loss * bs
@@ -217,10 +256,10 @@ for epoch in range(args.initial_epoch, args.epochs):
     if epoch % 20 == 0:
         metrics = {
             'epoch': epoch,
-            'epoch_loss': float(epoch_loss.item()),
-            'epoch_loss_sim': epoch_loss_sim.item(),
-            'epoch_loss_smooth': epoch_loss_smooth.item(),
-            'epoch_loss_seg': epoch_loss_seg.item(),
+            'epoch_loss': float(epoch_loss.item()) / total_data_count,
+            'epoch_loss_sim': epoch_loss_sim.item() / total_data_count,
+            'epoch_loss_smooth': epoch_loss_smooth.item() / total_data_count,
+            'epoch_loss_seg': epoch_loss_seg.item() / total_data_count,
             'total_data_count': total_data_count,
             'loss_history': (epoch_loss / total_data_count).item(),
         }
