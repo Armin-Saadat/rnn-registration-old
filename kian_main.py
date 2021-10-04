@@ -14,26 +14,22 @@ import random
 # ______ ARGS ______ #
 class Args():
     def __init__(self):
-        self.model_id = '3'
+        self.model_id = '808'
         self.saving_base = '/HDD/kian/saved-models/DIR1/'
         self.model_dir = f'{self.saving_base}{self.model_id}/'
-        self.train_mode = 'default to check the problem solved?!'
-        self.lr = 1e-3
-        self.epochs = 600
+        self.train_mode = 'all patient (bidir loss, window added) -- cont of 807'
+        self.lr = 1e-4
+        self.epochs = 400
         self.batch_size = 1
-        self.smooth_weight = 0.01
+        self.smooth_weight = 0
         self.seg_weight = 0
         self.loss = 'mse'      
-        self.load_model = None #'/HDD/kian/saved-models/32/0499.pt'
-        self.initial_epoch = 0  # to start from
-        self.save_every = 100
-        self.wait = 1
+        self.load_model = '/HDD/kian/saved-models/DIR1/807/0250.pt'
+        self.initial_epoch = 250 # to start from
+        self.save_every = 50
+        self.wait = 3
 
         assert self.loss == 'mse' or self.loss == 'ncc'
-        for obj in os.listdir(self.saving_base):
-            if obj == str(self.model_id):
-                raise Exception(f'ID Error: model with ID {self.model_id} already exists in {self.model_dir}')
-        os.mkdir(self.model_dir)
 
 
     def save(self):
@@ -50,6 +46,11 @@ class Args():
         model_info += f'initial epoch:  {self.initial_epoch}\n'
         model_info += f'save_every:     {self.save_every}\n'
         print(model_info)
+        
+        for obj in os.listdir(self.saving_base):
+            if obj == str(self.model_id):
+                raise Exception(f'ID Error: model with ID {self.model_id} already exists in {self.model_dir}')
+        os.mkdir(self.model_dir)
 
         with open(os.path.join(self.model_dir, f'model_{self.model_id}_info.txt'), 'w+') as info:
             info.write(model_info)
@@ -87,58 +88,80 @@ class Unet_ConvLSTM(nn.Module):
 
         # shape of imgs/lbs: (seq_size, bs, 1, W, H)
         # shape of unet_out: (seq_size - 1, bs, 2, W, H)
-        
-        st_pack = zip(images[:-1] + images[1:], images[1:] + images[:-1])
-        unet_out = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in st_pack], dim=0)
-
-        rnn_out, last_states = self.rnn(unet_out)
-        h, c = last_states[0]
-
         # shape of flows: (seq_size - 1, bs, 2, W, H)
-        flows = rnn_out[0].permute(1, 0, 2, 3, 4)
-
         # shape of moved_images = (seq_size - 1, bs, 1, W, H)
-        moved_images = torch.cat(
-            [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(images[:-1] + images[1:], flows[:])], dim=0)
+        
+        forward_sources, forward_targets = images[:-1], images[1:]
+        src_trg_zip = zip(forward_sources, forward_targets)
 
+        forward_unet_out = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
+        rnn_out, last_states = self.rnn(forward_unet_out)
+        h, c = last_states[0]
+        forward_flows = rnn_out[0].permute(1, 0, 2, 3, 4)
+        forward_moved_images = torch.cat(
+            [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(forward_sources, forward_flows[:])], dim=0)
+        
         if labels is not None:
-            moved_labels = torch.cat(
-                [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(labels[:-1] + labels[1:], flows[:])], dim=0)
-            return [moved_images, moved_labels, flows]
+            forward_lbs_sources = labels[:-1]
+            forward_moved_labels = torch.cat(
+            [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(forward_lbs_sources, forward_flows[:])], dim=0)
+
+            
+        backward_sources, backward_targets = images[1:], images[:-1]
+        src_trg_zip = zip(backward_sources, backward_targets)
+        backward_unet_out = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
+        rnn_out, last_states = self.rnn(backward_unet_out)
+        h, c = last_states[0]
+        backward_flows = rnn_out[0].permute(1, 0, 2, 3, 4)
+        backward_moved_images = torch.cat(
+            [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(backward_sources, backward_flows[:])], dim=0)
+        
+        if labels is not None:
+            backward_lbs_sources = labels[1:]
+            backward_moved_labels = torch.cat(
+            [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(backward_lbs_sources, backward_flows[:])], dim=0)
+            return forward_moved_images, forward_moved_labels, backward_moved_images, backward_moved_labels
         else:
-            return [moved_images, flows]
-
-
+            return forward_moved_images, backward_moved_images
+            
 
 
 # ______ Load and Prepare Data _______ #
-server = True  # False means Colab
 
-if server:
-    with open('/HDD/vxm-models/structured-data/unfiltered_images.pkl', 'rb') as f:
-        pre_images = pickle.load(f)
+with open('/HDD/vxm-models/structured-data/filtered_images.pkl', 'rb') as f:
+    pre_images = pickle.load(f)
 
-    with open('/HDD/vxm-models/structured-data/unfiltered_labels.pkl', 'rb') as f:
-        pre_labels = pickle.load(f)
-        
-    images, labels = [], []
-    for ind, img in pre_images.items():
-        inp = torch.from_numpy(img)
-        p_inp = torch.nn.functional.pad(inp, pad=(0, 0, 0, 0, 0, 40 - inp.shape[0]), mode='constant', value=0)
-        images.append(p_inp)
-        
-    for ind, img in pre_labels.items():
-        inp = torch.from_numpy(img)
-        p_inp = torch.nn.functional.pad(inp, pad=(0, 0, 0, 0, 0, 40 - inp.shape[0]), mode='constant', value=0)
-        labels.append(p_inp)    
-else:  
-    with open('./data/images', 'rb') as f:
-        images = pickle.load(f)
+with open('/HDD/vxm-models/structured-data/filtered_labels.pkl', 'rb') as f:
+    pre_labels = pickle.load(f)
 
-    with open('./data/labels', 'rb') as f:
-        labels = pickle.load(f)
-        
-# Normalize        
+images, labels = [], []
+for ind, img in pre_images.items():
+    inp = torch.from_numpy(img)
+    p_inp = torch.nn.functional.pad(inp, pad=(0, 0, 0, 0, 0, 40 - inp.shape[0]), mode='constant', value=0)
+    images.append(p_inp)
+
+for ind, img in pre_labels.items():
+    inp = torch.from_numpy(img)
+    p_inp = torch.nn.functional.pad(inp, pad=(0, 0, 0, 0, 0, 40 - inp.shape[0]), mode='constant', value=0)
+    labels.append(p_inp)    
+
+# # Normalize        
+# for img in images:
+#     for j, s in enumerate(img):
+#         if s.max() == 0:
+#             img[j] = s.float()
+#             continue
+#         img[j] = (s/s.max()).float()
+#     img = img.float()
+
+# for lb in labels:
+#     for j, s in enumerate(lb):
+#         if s.max() == 0:
+#             lb[j] = s.float()
+#             continue
+#         lb[j] = (s/s.max()).float()
+#     lb = lb.float()
+
 for i, img in enumerate(images):
     images[i] = (img/img.max()).float()
 
@@ -179,14 +202,19 @@ dataloader = get_dataloader(images, labels, args.batch_size)
 # _____ Model _____ #
 model = Unet_ConvLSTM(dataloader.dataset.image_size)
 model.to('cuda')
-_ = model.train()
-
-if args.load_model:
-    print(f'\nloading model from {args.load_model}')
-    model.load_state_dict(torch.load(args.load_model))
-    print('\nloaded\n')
 
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer=optimizer, mode='min', factor=0.5, patience=50, threshold=0.0001, verbose=True)
+
+if args.load_model:
+    checkpoint = torch.load(args.load_model)
+    print(f'\nloading model from {args.load_model}')
+    model.load_state_dict(checkpoint['model_state_dict'])
+#     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    print('\nloaded\n')
+    
+model.train()
 
 if args.loss == 'ncc':
     sim_loss_func = losses.NCC().loss
@@ -195,8 +223,8 @@ elif args.loss == 'mse':
 else:
     raise ValueError('Image loss should be "mse" or "ncc", but found "%s"' % args.image_loss)
 
-smooth_loss_func = losses.Grad('l2').loss
-smooth_weight = args.smooth_weight
+# smooth_loss_func = losses.Grad('l2').loss
+# smooth_weight = args.smooth_weight
 
 seg_loss_func = losses.MSE().loss
 seg_weight = args.seg_weight
@@ -208,21 +236,22 @@ zero_phi = torch.zeros(39, 2, 256, 256).float().to('cuda')
 # _____ Train _____ #
 loss_history, all_metrics = [], []
 for epoch in range(args.initial_epoch, args.epochs):
-    time.sleep(args.wait)
-    # save model checkpoint
-    if (epoch+1) % args.save_every == 0:
-        torch.save(model.state_dict(), os.path.join(args.model_dir, '%04d.pt' % epoch))
+
+    if (epoch + 1) % args.save_every == 0:
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            }, os.path.join(args.model_dir, '%04d.pt' % (epoch + 1)))
         with open(f'{args.model_dir}train_metrics.json', 'w+') as outfile:
             json.dump(all_metrics, outfile)
 
     epoch_loss = 0
-    epoch_loss_sim = 0 
-    epoch_loss_smooth = 0
-    epoch_loss_seg = 0
     total_data_count = 0
     epoch_start_time = time.time()
 
     for d_idx, data in enumerate(dataloader):
+        if d_idx % 5 == 0:
+            time.sleep(args.wait)
         
         # shape of imgs/lbs: (bs, seq_size, W, H) --> (seq_size, bs, 1, W, H)
         # shape of moved_imgs/moved_labes: (seq_size - 1, bs, 1, W, H)
@@ -230,38 +259,41 @@ for epoch in range(args.initial_epoch, args.epochs):
         
         imgs, lbs = data
         bs = imgs.shape[0]
-
+        
+        last_real = None
+        for i, s in enumerate(imgs[0]):
+            if s.max() < 1e-3:
+                last_real = i - 1
+                break
         imgs = imgs.permute(1, 0, 2, 3).unsqueeze(2).to('cuda')
         lbs = lbs.permute(1, 0, 2, 3).unsqueeze(2).to('cuda')
+        
+        loss, window = 0, 5
+        for f, t in zip(np.arange(last_real + 1 - window), np.arange(window, last_real + 1)):
+            fmoved, fmoved_labels, bmoved, bmoved_labels = model(imgs[f:t], lbs[f:t])
+            f_trgs, b_trgs = imgs[f:t][1:], imgs[f:t][:-1]
+            loss += sim_loss_func(f_trgs, fmoved) + sim_loss_func(b_trgs, bmoved)
+            if (f + 1) % 6 == 0:
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                epoch_loss += loss
+                loss = 0
+        if loss != 0:
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss
+            total_data_count += 1
 
-        moved_imgs, moved_lbs, flows = model(imgs, lbs)
-        
-        loss = 0
-        for i in range(bs):
-            sim_loss = sim_loss_func(imgs[1:, i], moved_imgs[:, i])
-            smooth_loss = smooth_loss_func(zero_phi, flows[:, i])
-            seg_loss = seg_loss_func(lbs[1:, i], moved_lbs[:, i])
-            loss += sim_loss + (smooth_weight * smooth_loss) + (seg_weight * seg_loss)
-
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        
-        epoch_loss += loss * bs
-        epoch_loss_sim += sim_loss * bs
-        epoch_loss_smooth += smooth_loss * bs
-        epoch_loss_seg += seg_loss * bs
-        total_data_count += bs 
-        
+    epc_loss = float(epoch_loss) / total_data_count
+    scheduler.step(epc_loss)
+    
     if epoch % 20 == 0:
         metrics = {
             'epoch': epoch,
-            'epoch_loss': float(epoch_loss.item()) / total_data_count,
-            'epoch_loss_sim': epoch_loss_sim.item() / total_data_count,
-            'epoch_loss_smooth': epoch_loss_smooth.item() / total_data_count,
-            'epoch_loss_seg': epoch_loss_seg.item() / total_data_count,
+            'epoch_loss': epc_loss,
             'total_data_count': total_data_count,
-            'loss_history': (epoch_loss / total_data_count).item(),
         }
         all_metrics.append(metrics)
     
@@ -269,9 +301,6 @@ for epoch in range(args.initial_epoch, args.epochs):
     loss_history.append(epoch_loss / total_data_count)
     msg = 'epoch %d/%d, ' % (epoch + 1, args.epochs)
     msg += 'loss= %.4e, ' % (epoch_loss / total_data_count)
-    msg += 'sim_loss= %.4e, ' % (epoch_loss_sim / total_data_count)
-    msg += 'smooth_loss= %.4e, ' % (epoch_loss_smooth / total_data_count)
-    msg += 'seg_loss= %.4e, ' % (epoch_loss_seg / total_data_count)
     msg += 'time= %.4f, ' % (time.time() - epoch_start_time)
     print(msg, flush=True)
     
