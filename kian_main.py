@@ -14,18 +14,18 @@ import random
 # ______ ARGS ______ #
 class Args():
     def __init__(self):
-        self.model_id = '808'
+        self.model_id = '101'
         self.saving_base = '/HDD/kian/saved-models/DIR1/'
         self.model_dir = f'{self.saving_base}{self.model_id}/'
-        self.train_mode = 'all patient (bidir loss, window added) -- cont of 807'
-        self.lr = 1e-4
+        self.train_mode = 'convlstm with 1e-3 window 6'
+        self.lr = 1e-5
         self.epochs = 400
         self.batch_size = 1
         self.smooth_weight = 0
         self.seg_weight = 0
         self.loss = 'mse'      
-        self.load_model = '/HDD/kian/saved-models/DIR1/807/0250.pt'
-        self.initial_epoch = 250 # to start from
+        self.load_model = None #'/HDD/kian/saved-models/DIR1/905/0550.pt'
+        self.initial_epoch = 0 # to start from
         self.save_every = 50
         self.wait = 3
 
@@ -84,7 +84,7 @@ class Unet_ConvLSTM(nn.Module):
         self.rnn = ConvLSTM(input_dim=2, hidden_dim=2, kernel_size=(3, 3), num_layers=1, batch_first=False)
         self.spatial_transformer = SpatialTransformer(size=image_size)
 
-    def forward(self, images, labels=None):
+    def forward(self, images, labels=None, convlstm=True):
 
         # shape of imgs/lbs: (seq_size, bs, 1, W, H)
         # shape of unet_out: (seq_size - 1, bs, 2, W, H)
@@ -93,11 +93,14 @@ class Unet_ConvLSTM(nn.Module):
         
         forward_sources, forward_targets = images[:-1], images[1:]
         src_trg_zip = zip(forward_sources, forward_targets)
+        if convlstm:
+            forward_unet_out = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
+            rnn_out, last_states = self.rnn(forward_unet_out)
+            h, c = last_states[0]
+            forward_flows = rnn_out[0].permute(1, 0, 2, 3, 4)
+        else:
+            forward_flows = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
 
-        forward_unet_out = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
-        rnn_out, last_states = self.rnn(forward_unet_out)
-        h, c = last_states[0]
-        forward_flows = rnn_out[0].permute(1, 0, 2, 3, 4)
         forward_moved_images = torch.cat(
             [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(forward_sources, forward_flows[:])], dim=0)
         
@@ -105,14 +108,17 @@ class Unet_ConvLSTM(nn.Module):
             forward_lbs_sources = labels[:-1]
             forward_moved_labels = torch.cat(
             [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(forward_lbs_sources, forward_flows[:])], dim=0)
-
             
         backward_sources, backward_targets = images[1:], images[:-1]
         src_trg_zip = zip(backward_sources, backward_targets)
-        backward_unet_out = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
-        rnn_out, last_states = self.rnn(backward_unet_out)
-        h, c = last_states[0]
-        backward_flows = rnn_out[0].permute(1, 0, 2, 3, 4)
+        if convlstm:
+            backward_unet_out = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
+            rnn_out, last_states = self.rnn(backward_unet_out)
+            h, c = last_states[0]
+            backward_flows = rnn_out[0].permute(1, 0, 2, 3, 4)
+        else:
+            backward_flows = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
+
         backward_moved_images = torch.cat(
             [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(backward_sources, backward_flows[:])], dim=0)
         
@@ -144,23 +150,7 @@ for ind, img in pre_labels.items():
     inp = torch.from_numpy(img)
     p_inp = torch.nn.functional.pad(inp, pad=(0, 0, 0, 0, 0, 40 - inp.shape[0]), mode='constant', value=0)
     labels.append(p_inp)    
-
-# # Normalize        
-# for img in images:
-#     for j, s in enumerate(img):
-#         if s.max() == 0:
-#             img[j] = s.float()
-#             continue
-#         img[j] = (s/s.max()).float()
-#     img = img.float()
-
-# for lb in labels:
-#     for j, s in enumerate(lb):
-#         if s.max() == 0:
-#             lb[j] = s.float()
-#             continue
-#         lb[j] = (s/s.max()).float()
-#     lb = lb.float()
+    
 
 for i, img in enumerate(images):
     images[i] = (img/img.max()).float()
@@ -204,14 +194,15 @@ model = Unet_ConvLSTM(dataloader.dataset.image_size)
 model.to('cuda')
 
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer=optimizer, mode='min', factor=0.5, patience=50, threshold=0.0001, verbose=True)
+# scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+#             optimizer=optimizer, mode='min', factor=0.5, patience=10, threshold=0.0001, verbose=True)
+scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.995)
 
 if args.load_model:
     checkpoint = torch.load(args.load_model)
     print(f'\nloading model from {args.load_model}')
     model.load_state_dict(checkpoint['model_state_dict'])
-#     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     print('\nloaded\n')
     
 model.train()
@@ -225,19 +216,22 @@ else:
 
 # smooth_loss_func = losses.Grad('l2').loss
 # smooth_weight = args.smooth_weight
+# seg_weight = args.seg_weight
 
 seg_loss_func = losses.MSE().loss
-seg_weight = args.seg_weight
-
 zero_phi = torch.zeros(39, 2, 256, 256).float().to('cuda')
 
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
 
-
+    
 # _____ Train _____ #
 loss_history, all_metrics = [], []
 for epoch in range(args.initial_epoch, args.epochs):
 
     if (epoch + 1) % args.save_every == 0:
+        print(f'------- lr: {get_lr(optimizer)} --------')
         torch.save({
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
@@ -250,7 +244,7 @@ for epoch in range(args.initial_epoch, args.epochs):
     epoch_start_time = time.time()
 
     for d_idx, data in enumerate(dataloader):
-        if d_idx % 5 == 0:
+        if d_idx % 4 == 0:
             time.sleep(args.wait)
         
         # shape of imgs/lbs: (bs, seq_size, W, H) --> (seq_size, bs, 1, W, H)
@@ -268,9 +262,9 @@ for epoch in range(args.initial_epoch, args.epochs):
         imgs = imgs.permute(1, 0, 2, 3).unsqueeze(2).to('cuda')
         lbs = lbs.permute(1, 0, 2, 3).unsqueeze(2).to('cuda')
         
-        loss, window = 0, 5
+        loss, window = 0, 6
         for f, t in zip(np.arange(last_real + 1 - window), np.arange(window, last_real + 1)):
-            fmoved, fmoved_labels, bmoved, bmoved_labels = model(imgs[f:t], lbs[f:t])
+            fmoved, fmoved_labels, bmoved, bmoved_labels = model(imgs[f:t], lbs[f:t], convlstm=True)
             f_trgs, b_trgs = imgs[f:t][1:], imgs[f:t][:-1]
             loss += sim_loss_func(f_trgs, fmoved) + sim_loss_func(b_trgs, bmoved)
             if (f + 1) % 6 == 0:
@@ -284,7 +278,7 @@ for epoch in range(args.initial_epoch, args.epochs):
             loss.backward()
             optimizer.step()
             epoch_loss += loss
-            total_data_count += 1
+        total_data_count += 1
 
     epc_loss = float(epoch_loss) / total_data_count
     scheduler.step(epc_loss)
@@ -294,15 +288,19 @@ for epoch in range(args.initial_epoch, args.epochs):
             'epoch': epoch,
             'epoch_loss': epc_loss,
             'total_data_count': total_data_count,
+            'current_lr': get_lr(optimizer),
         }
         all_metrics.append(metrics)
     
     # print epoch info
-    loss_history.append(epoch_loss / total_data_count)
+    loss_history.append(epc_loss)
     msg = 'epoch %d/%d, ' % (epoch + 1, args.epochs)
-    msg += 'loss= %.4e, ' % (epoch_loss / total_data_count)
+    msg += 'loss= %.4e, ' % (epc_loss)
     msg += 'time= %.4f, ' % (time.time() - epoch_start_time)
     print(msg, flush=True)
     
     
-torch.save(model.state_dict(), os.path.join(args.model_dir, '%04d.pt' % args.epochs))
+torch.save({
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        }, os.path.join(args.model_dir, '%04d.pt' % (args.epochs)))
