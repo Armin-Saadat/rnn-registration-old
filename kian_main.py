@@ -4,7 +4,6 @@ import torch
 import numpy as np
 import time
 import os
-import neurite as ne
 from utils import losses
 import shutil
 import pickle
@@ -68,6 +67,7 @@ from models.unet import Unet
 from models2.convlstm import ConvLSTM
 from utils.spatial_transform import SpatialTransformer
 
+
 class Unet_ConvLSTM(nn.Module):
     def __init__(self, image_size):
         super(Unet_ConvLSTM, self).__init__()
@@ -82,7 +82,7 @@ class Unet_ConvLSTM(nn.Module):
         Conv = getattr(nn, 'Conv%dd' % self.ndims)
         self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1)
 
-        self.rnn = ConvLSTM(img_size=image_size, input_dim=2, hidden_dim=2, kernel_size=(3, 3),
+        self.rnn = ConvLSTM(img_size=image_size, input_dim=self.unet.final_nf, hidden_dim=2, kernel_size=(3, 3),
                             bidirectional=False, return_sequence=True, batch_first=False)
         self.spatial_transformer = SpatialTransformer(size=image_size)
 
@@ -96,9 +96,8 @@ class Unet_ConvLSTM(nn.Module):
         forward_sources, forward_targets = images[:-1], images[1:]
         src_trg_zip = zip(forward_sources, forward_targets)
         if convlstm:
-            forward_unet_out = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
+            forward_unet_out = torch.cat([self.unet(torch.cat([src, trg], dim=1)).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
             rnn_out, last_states, _ = self.rnn(forward_unet_out)
-#             h, c = last_states[0]
             forward_flows = rnn_out[0].permute(1, 0, 2, 3, 4)
         else:
             forward_flows = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
@@ -114,9 +113,8 @@ class Unet_ConvLSTM(nn.Module):
         backward_sources, backward_targets = images[1:], images[:-1]
         src_trg_zip = zip(backward_sources, backward_targets)
         if convlstm:
-            backward_unet_out = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
+            backward_unet_out = torch.cat([self.unet(torch.cat([src, trg], dim=1)).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
             rnn_out, last_states, _ = self.rnn(backward_unet_out)
-#             h, c = last_states[0]
             backward_flows = rnn_out[0].permute(1, 0, 2, 3, 4)
         else:
             backward_flows = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
@@ -127,7 +125,7 @@ class Unet_ConvLSTM(nn.Module):
         if labels is not None:
             backward_lbs_sources = labels[1:]
             backward_moved_labels = torch.cat(
-            [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(backward_lbs_sources, backward_flows[:])], dim=0)
+                [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(backward_lbs_sources, backward_flows[:])], dim=0)
             return forward_moved_images, forward_moved_labels, backward_moved_images, backward_moved_labels
         else:
             return forward_moved_images, backward_moved_images
