@@ -19,20 +19,20 @@ elif SERVER == 166:
 # ______ ARGS ______ #
 class Args():
     def __init__(self, base):
-        self.model_id = 'm9'
+        self.model_id = 'k2'
         self.saving_base = base
         self.model_dir = f'{self.saving_base}{self.model_id}/'
-        self.train_mode = 'first try on new convlstm - 1 patient - after removing self.flow'
+        self.train_mode = 'hidden_dim increased, all patients'
         self.lr = 1e-3
         self.epochs = 1200
         self.batch_size = 1
         self.smooth_weight = 0
         self.seg_weight = 0
-        self.loss = 'mse'      
+        self.loss = 'mse'
         self.load_model = None # '/HDD/kian/saved-models/DIR1/n7/0400.pt'
         self.initial_epoch = 0 # to start from
         self.save_every = 200
-        self.wait = 0
+        self.wait = 0.5
 
         assert self.loss == 'mse' or self.loss == 'ncc'
 
@@ -51,7 +51,7 @@ class Args():
         model_info += f'initial epoch:  {self.initial_epoch}\n'
         model_info += f'save_every:     {self.save_every}\n'
         print(model_info)
-        
+
         for obj in os.listdir(self.saving_base):
             if obj == str(self.model_id):
                 raise Exception(f'ID Error: model with ID {self.model_id} already exists in {self.model_dir}')
@@ -87,8 +87,8 @@ class Unet_ConvLSTM(nn.Module):
         # configure unet to flow field layer
         Conv = getattr(nn, 'Conv%dd' % self.ndims)
 
-        self.hidden_dim = 8
-        self.flow = Conv(self.hidden_dim, kernel_size=3, padding=1)
+        self.hidden_dim = 16
+        self.flow = Conv(in_channels=self.hidden_dim, out_channels=2, kernel_size=3, padding=1)
         self.rnn = ConvLSTM(img_size=image_size, input_dim=self.unet.final_nf, hidden_dim=self.hidden_dim, kernel_size=(3, 3),
                             bidirectional=False, return_sequence=True, batch_first=False)
         self.spatial_transformer = SpatialTransformer(size=image_size)
@@ -99,36 +99,36 @@ class Unet_ConvLSTM(nn.Module):
         # shape of unet_out: (seq_size - 1, bs, 2, W, H)
         # shape of flows: (seq_size - 1, bs, 2, W, H)
         # shape of moved_images = (seq_size - 1, bs, 1, W, H)
-        
+
         forward_sources, forward_targets = images[:-1], images[1:]
         src_trg_zip = zip(forward_sources, forward_targets)
         if convlstm:
             forward_unet_out = torch.cat([self.unet(torch.cat([src, trg], dim=1)).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
             rnn_out, last_states, _ = self.rnn(forward_unet_out)
-            forward_flows = self.flow(rnn_out[0].permute(1, 0, 2, 3, 4))
+            forward_flows = self.flow(rnn_out[0].squeeze(0)).unsqueeze(1)
         else:
             forward_flows = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
 
         forward_moved_images = torch.cat(
             [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(forward_sources, forward_flows[:])], dim=0)
-        
+
         if labels is not None:
             forward_lbs_sources = labels[:-1]
             forward_moved_labels = torch.cat(
-            [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(forward_lbs_sources, forward_flows[:])], dim=0)
-            
+                [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(forward_lbs_sources, forward_flows[:])], dim=0)
+
         backward_sources, backward_targets = images[1:], images[:-1]
         src_trg_zip = zip(backward_sources, backward_targets)
         if convlstm:
             backward_unet_out = torch.cat([self.unet(torch.cat([src, trg], dim=1)).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
             rnn_out, last_states, _ = self.rnn(backward_unet_out)
-            backward_flows = self.flow(rnn_out[0].permute(1, 0, 2, 3, 4))
+            backward_flows = self.flow(rnn_out[0].squeeze(0)).unsqueeze(1)
         else:
             backward_flows = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
 
         backward_moved_images = torch.cat(
             [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(backward_sources, backward_flows[:])], dim=0)
-        
+
         if labels is not None:
             backward_lbs_sources = labels[1:]
             backward_moved_labels = torch.cat(
@@ -136,7 +136,7 @@ class Unet_ConvLSTM(nn.Module):
             return forward_moved_images, forward_moved_labels, backward_moved_images, backward_moved_labels
         else:
             return forward_moved_images, backward_moved_images
-            
+
 
 
 # ______ Load and Prepare Data _______ #
@@ -144,14 +144,14 @@ if SERVER == 168:
     data_base = '/home/khalili/kian-data/'
 elif SERVER == 166:
     data_base = '/HDD/vxm-models/structured-data/'
-    
+
 with open(f'{data_base}filtered_images.pkl', 'rb') as f:
     pre_images = pickle.load(f)
 
 with open(f'{data_base}filtered_labels.pkl', 'rb') as f:
     pre_labels = pickle.load(f)
 
-    
+
 images, labels = [], []
 for ind, img in pre_images.items():
     inp = torch.from_numpy(img)
@@ -161,18 +161,18 @@ for ind, img in pre_images.items():
 for ind, img in pre_labels.items():
     inp = torch.from_numpy(img)
     p_inp = torch.nn.functional.pad(inp, pad=(0, 0, 0, 0, 0, 40 - inp.shape[0]), mode='constant', value=0)
-    labels.append(p_inp)    
-    
+    labels.append(p_inp)
+
 
 for i, img in enumerate(images):
     images[i] = (img/img.max()).float()
 
 for i, lb in enumerate(labels):
     labels[i] = (lb/lb.max()).float()
-    
-    
-    
-    
+
+
+
+
 # ____ Dataloader ____ #
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
@@ -197,7 +197,7 @@ def get_dataloader(images, labels, batch_size, shuffle=False, pin_memory=False, 
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, pin_memory=pin_memory, num_workers=workers)
     return dataloader
 
-dataloader = get_dataloader(images[:1], labels[:1], args.batch_size)
+dataloader = get_dataloader(images, labels, args.batch_size)
 
 
 
@@ -207,7 +207,7 @@ model.to('cuda')
 
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer=optimizer, mode='min', factor=0.5, patience=60, threshold=0.0001, verbose=True)
+    optimizer=optimizer, mode='min', factor=0.5, patience=60, threshold=0.0001, verbose=True)
 # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.995)
 
 if args.load_model:
@@ -216,7 +216,7 @@ if args.load_model:
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     print('\nloaded\n')
-    
+
 model.train()
 
 if args.loss == 'ncc':
@@ -237,7 +237,7 @@ def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
-    
+
 # _____ Train _____ #
 loss_history, all_metrics = [], []
 for epoch in range(args.initial_epoch, args.epochs):
@@ -247,7 +247,7 @@ for epoch in range(args.initial_epoch, args.epochs):
         torch.save({
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
-            }, os.path.join(args.model_dir, '%04d.pt' % (epoch + 1)))
+        }, os.path.join(args.model_dir, '%04d.pt' % (epoch + 1)))
         with open(f'{args.model_dir}train_metrics.json', 'w+') as outfile:
             json.dump(all_metrics, outfile)
 
@@ -256,16 +256,14 @@ for epoch in range(args.initial_epoch, args.epochs):
     epoch_start_time = time.time()
 
     for d_idx, data in enumerate(dataloader):
-#         if d_idx % 4 == 0:
-#             time.sleep(args.wait)
-        
+
         # shape of imgs/lbs: (bs, seq_size, W, H) --> (seq_size, bs, 1, W, H)
         # shape of moved_imgs/moved_labes: (seq_size - 1, bs, 1, W, H)
         # shape of flows: (seq_size - 1, bs, 2, W, H)
-        
+
         imgs, lbs = data
         bs = imgs.shape[0]
-        
+
         last_real = None
         for i, s in enumerate(imgs[0]):
             if s.max() < 1e-3:
@@ -273,7 +271,7 @@ for epoch in range(args.initial_epoch, args.epochs):
                 break
         imgs = imgs.permute(1, 0, 2, 3).unsqueeze(2).to('cuda')
         lbs = lbs.permute(1, 0, 2, 3).unsqueeze(2).to('cuda')
-        
+
         loss, window = 0, 6
         for f, t in zip(np.arange(last_real + 1 - window), np.arange(window, last_real + 1)):
             fmoved, fmoved_labels, bmoved, bmoved_labels = model(imgs[f:t], lbs[f:t], convlstm=True)
@@ -294,7 +292,7 @@ for epoch in range(args.initial_epoch, args.epochs):
 
     epc_loss = float(epoch_loss) / total_data_count
     scheduler.step(epc_loss)
-    
+
     if epoch % 20 == 0:
         metrics = {
             'epoch': epoch,
@@ -303,16 +301,16 @@ for epoch in range(args.initial_epoch, args.epochs):
             'current_lr': get_lr(optimizer),
         }
         all_metrics.append(metrics)
-    
+
     # print epoch info
     loss_history.append(epc_loss)
     msg = 'epoch %d/%d, ' % (epoch + 1, args.epochs)
     msg += 'loss= %.4e, ' % (epc_loss)
     msg += 'time= %.4f, ' % (time.time() - epoch_start_time)
     print(msg, flush=True)
-    
-    
+
+
 torch.save({
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        }, os.path.join(args.model_dir, '%04d.pt' % (args.epochs)))
+    'model_state_dict': model.state_dict(),
+    'optimizer_state_dict': optimizer.state_dict(),
+}, os.path.join(args.model_dir, '%04d.pt' % (args.epochs)))
