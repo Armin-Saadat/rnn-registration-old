@@ -64,7 +64,8 @@ import torch
 import torch.nn as nn
 from models.unet_convlstm import Unet_ConvLSTM
 from models.unet import Unet
-from models.conv_lstm import ConvLSTM
+# from models.conv_lstm import ConvLSTM
+from models2.convlstm import ConvLSTM
 from utils.spatial_transform import SpatialTransformer
 
 class Unet_ConvLSTM(nn.Module):
@@ -81,7 +82,8 @@ class Unet_ConvLSTM(nn.Module):
         Conv = getattr(nn, 'Conv%dd' % self.ndims)
         self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1)
 
-        self.rnn = ConvLSTM(input_dim=2, hidden_dim=2, kernel_size=(3, 3), num_layers=1, batch_first=False)
+        self.rnn = ConvLSTM(img_size=image_size, input_dim=2, hidden_dim=16, kernel_size=(3, 3),
+                            bidirectional=True, batch_first=False)
         self.spatial_transformer = SpatialTransformer(size=image_size)
 
     def forward(self, images, labels=None, convlstm=True):
