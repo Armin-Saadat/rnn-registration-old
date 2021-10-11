@@ -86,9 +86,10 @@ class Unet_ConvLSTM(nn.Module):
 
         # configure unet to flow field layer
         Conv = getattr(nn, 'Conv%dd' % self.ndims)
-        self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1)
 
-        self.rnn = ConvLSTM(img_size=image_size, input_dim=self.unet.final_nf, hidden_dim=2, kernel_size=(3, 3),
+        self.hidden_dim = 8
+        self.flow = Conv(self.hidden_dim, kernel_size=3, padding=1)
+        self.rnn = ConvLSTM(img_size=image_size, input_dim=self.unet.final_nf, hidden_dim=self.hidden_dim, kernel_size=(3, 3),
                             bidirectional=False, return_sequence=True, batch_first=False)
         self.spatial_transformer = SpatialTransformer(size=image_size)
 
@@ -104,7 +105,7 @@ class Unet_ConvLSTM(nn.Module):
         if convlstm:
             forward_unet_out = torch.cat([self.unet(torch.cat([src, trg], dim=1)).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
             rnn_out, last_states, _ = self.rnn(forward_unet_out)
-            forward_flows = rnn_out[0].permute(1, 0, 2, 3, 4)
+            forward_flows = self.flow(rnn_out[0].permute(1, 0, 2, 3, 4))
         else:
             forward_flows = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
 
@@ -121,7 +122,7 @@ class Unet_ConvLSTM(nn.Module):
         if convlstm:
             backward_unet_out = torch.cat([self.unet(torch.cat([src, trg], dim=1)).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
             rnn_out, last_states, _ = self.rnn(backward_unet_out)
-            backward_flows = rnn_out[0].permute(1, 0, 2, 3, 4)
+            backward_flows = self.flow(rnn_out[0].permute(1, 0, 2, 3, 4))
         else:
             backward_flows = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
 
