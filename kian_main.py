@@ -10,22 +10,28 @@ import pickle
 import json
 import random
 
+SERVER = 168
+if SERVER == 168:
+    base = '/home/khalili/kian-data/saved-models/'
+elif SERVER == 166:
+    base = '/HDD/kian/saved-models/DIR1/'
+
 # ______ ARGS ______ #
 class Args():
-    def __init__(self):
-        self.model_id = 'n8'
-        self.saving_base = '/HDD/kian/saved-models/DIR1/'
+    def __init__(self, base):
+        self.model_id = 'm9'
+        self.saving_base = base
         self.model_dir = f'{self.saving_base}{self.model_id}/'
-        self.train_mode = 'first try on new convlstm - 1 patient, cont of n7'
+        self.train_mode = 'first try on new convlstm - 1 patient - after removing self.flow'
         self.lr = 1e-3
-        self.epochs = 800
+        self.epochs = 1200
         self.batch_size = 1
         self.smooth_weight = 0
         self.seg_weight = 0
         self.loss = 'mse'      
-        self.load_model = '/HDD/kian/saved-models/DIR1/n7/0400.pt'
-        self.initial_epoch = 400 # to start from
-        self.save_every = 50
+        self.load_model = None # '/HDD/kian/saved-models/DIR1/n7/0400.pt'
+        self.initial_epoch = 0 # to start from
+        self.save_every = 200
         self.wait = 0
 
         assert self.loss == 'mse' or self.loss == 'ncc'
@@ -55,7 +61,7 @@ class Args():
             info.write(model_info)
             info.close()
 
-args = Args()
+args = Args(base)
 args.save()
 
 
@@ -133,13 +139,18 @@ class Unet_ConvLSTM(nn.Module):
 
 
 # ______ Load and Prepare Data _______ #
-
-with open('/HDD/vxm-models/structured-data/filtered_images.pkl', 'rb') as f:
+if SERVER == 168:
+    data_base = '/home/khalili/kian-data/'
+elif SERVER == 166:
+    data_base = '/HDD/vxm-models/structured-data/'
+    
+with open(f'{data_base}filtered_images.pkl', 'rb') as f:
     pre_images = pickle.load(f)
 
-with open('/HDD/vxm-models/structured-data/filtered_labels.pkl', 'rb') as f:
+with open(f'{data_base}filtered_labels.pkl', 'rb') as f:
     pre_labels = pickle.load(f)
 
+    
 images, labels = [], []
 for ind, img in pre_images.items():
     inp = torch.from_numpy(img)
@@ -194,9 +205,9 @@ model = Unet_ConvLSTM(dataloader.dataset.image_size)
 model.to('cuda')
 
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-# scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-#             optimizer=optimizer, mode='min', factor=0.5, patience=10, threshold=0.0001, verbose=True)
-scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.995)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer=optimizer, mode='min', factor=0.5, patience=60, threshold=0.0001, verbose=True)
+# scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.995)
 
 if args.load_model:
     checkpoint = torch.load(args.load_model)
