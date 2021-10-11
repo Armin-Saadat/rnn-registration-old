@@ -227,7 +227,7 @@ class ConvLSTM(nn.Module):
             
             output_inner.append(h)
         output_inner = torch.stack((output_inner), dim=1)
-        layer_output = output_inner
+        layer_output = [output_inner]
         last_state = [h, c]
         ####################
         
@@ -248,7 +248,7 @@ class ConvLSTM(nn.Module):
             last_state_inv = [h_inv, c_inv]
         ###################################
         
-        return layer_output if self.return_sequence is True else layer_output[:, -1:], last_state, last_state_inv if self.bidirectional is True else None
+        return layer_output if self.return_sequence is True else layer_output[-1:], last_state, last_state_inv if self.bidirectional is True else None
 
     def _init_hidden(self, batch_size):
         init_states_fw = self.cell_fw.init_hidden(batch_size)

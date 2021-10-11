@@ -14,20 +14,20 @@ import random
 # ______ ARGS ______ #
 class Args():
     def __init__(self):
-        self.model_id = '101'
+        self.model_id = 'n8'
         self.saving_base = '/HDD/kian/saved-models/DIR1/'
         self.model_dir = f'{self.saving_base}{self.model_id}/'
-        self.train_mode = 'convlstm with 1e-3 window 6'
-        self.lr = 1e-5
-        self.epochs = 400
+        self.train_mode = 'first try on new convlstm - 1 patient, cont of n7'
+        self.lr = 1e-3
+        self.epochs = 800
         self.batch_size = 1
         self.smooth_weight = 0
         self.seg_weight = 0
         self.loss = 'mse'      
-        self.load_model = None #'/HDD/kian/saved-models/DIR1/905/0550.pt'
-        self.initial_epoch = 0 # to start from
+        self.load_model = '/HDD/kian/saved-models/DIR1/n7/0400.pt'
+        self.initial_epoch = 400 # to start from
         self.save_every = 50
-        self.wait = 3
+        self.wait = 0
 
         assert self.loss == 'mse' or self.loss == 'ncc'
 
@@ -82,8 +82,8 @@ class Unet_ConvLSTM(nn.Module):
         Conv = getattr(nn, 'Conv%dd' % self.ndims)
         self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1)
 
-        self.rnn = ConvLSTM(img_size=image_size, input_dim=2, hidden_dim=16, kernel_size=(3, 3),
-                            bidirectional=True, batch_first=False)
+        self.rnn = ConvLSTM(img_size=image_size, input_dim=2, hidden_dim=2, kernel_size=(3, 3),
+                            bidirectional=False, return_sequence=True, batch_first=False)
         self.spatial_transformer = SpatialTransformer(size=image_size)
 
     def forward(self, images, labels=None, convlstm=True):
@@ -97,8 +97,8 @@ class Unet_ConvLSTM(nn.Module):
         src_trg_zip = zip(forward_sources, forward_targets)
         if convlstm:
             forward_unet_out = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
-            rnn_out, last_states = self.rnn(forward_unet_out)
-            h, c = last_states[0]
+            rnn_out, last_states, _ = self.rnn(forward_unet_out)
+#             h, c = last_states[0]
             forward_flows = rnn_out[0].permute(1, 0, 2, 3, 4)
         else:
             forward_flows = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
@@ -115,8 +115,8 @@ class Unet_ConvLSTM(nn.Module):
         src_trg_zip = zip(backward_sources, backward_targets)
         if convlstm:
             backward_unet_out = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
-            rnn_out, last_states = self.rnn(backward_unet_out)
-            h, c = last_states[0]
+            rnn_out, last_states, _ = self.rnn(backward_unet_out)
+#             h, c = last_states[0]
             backward_flows = rnn_out[0].permute(1, 0, 2, 3, 4)
         else:
             backward_flows = torch.cat([self.flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0) for src, trg in src_trg_zip], dim=0)
@@ -187,7 +187,7 @@ def get_dataloader(images, labels, batch_size, shuffle=False, pin_memory=False, 
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, pin_memory=pin_memory, num_workers=workers)
     return dataloader
 
-dataloader = get_dataloader(images, labels, args.batch_size)
+dataloader = get_dataloader(images[:1], labels[:1], args.batch_size)
 
 
 
@@ -246,8 +246,8 @@ for epoch in range(args.initial_epoch, args.epochs):
     epoch_start_time = time.time()
 
     for d_idx, data in enumerate(dataloader):
-        if d_idx % 4 == 0:
-            time.sleep(args.wait)
+#         if d_idx % 4 == 0:
+#             time.sleep(args.wait)
         
         # shape of imgs/lbs: (bs, seq_size, W, H) --> (seq_size, bs, 1, W, H)
         # shape of moved_imgs/moved_labes: (seq_size - 1, bs, 1, W, H)
