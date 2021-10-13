@@ -19,25 +19,25 @@ from utils.spatial_transform import SpatialTransformer
 class Args:
     def __init__(self):
         self.SERVER = 168
-        self.model_id = 'slowUnet-2'
-        self.model_description = ''
-        self.all_patients = True
-        self.one_patient = None
+        self.model_id = 'y6'
+        self.model_description = '1p, Unet Rnn'
+        self.all_patients = False
+        self.one_patient = 1
         self.use_rnn = True
         self.multi_windows = True
         self.use_filtered_dataset = True
-        self.lr = 1e-4
-        self.epochs = 2400
+        self.lr = 5e-4
+        self.epochs = 5000
         self.batch_size = 1
         self.loss = 'mse'
-        self.load_model = None   # '/HDD/kian/saved-models/DIR1/n7/0400.pt'
+        self.load_model = None   #'/home/khalili/kian-data/saved-models/x1/2500.pt'
         self.initial_epoch = 0   # to start from
-        self.save_every = 200
+        self.save_every = 250
         self.cooldown_time = 0   # to decrease GPU temp
         self.lr_scheduler = 'ReduceLROnPlateau'
 
         if self.lr_scheduler == 'ReduceLROnPlateau':
-            self.lr_scheduler_args = {'mode': 'min', 'factor': 0.75, 'patience': 20, 'threshold': 0.0001}
+            self.lr_scheduler_args = {'mode': 'min', 'factor': 0.75, 'patience': 25, 'threshold': 0.0001}
         elif self.lr_scheduler == 'ExponentialLR':
             self.lr_scheduler_args = {'gamma': 0.995}
         else:
