@@ -36,6 +36,14 @@ class Args:
         self.cooldown_time = 0   # to decrease GPU temp
         self.lr_scheduler = 'ReduceLROnPlateau'
 
+        if self.use_rnn:
+            self.rnn_hidden_dim = 8
+            self.rnn_mid_flow_size = 4
+
+        if self.multi_windows:
+            self.window = 4
+            self.step = 2
+
         if self.lr_scheduler == 'ReduceLROnPlateau':
             self.lr_scheduler_args = {'mode': 'min', 'factor': 0.75, 'patience': 25, 'threshold': 0.0001}
         elif self.lr_scheduler == 'ExponentialLR':
@@ -84,7 +92,7 @@ args.save_info()
 
 # ______________________________________________________________________ Unet_ConvLSTM Class
 class Unet_ConvLSTM(nn.Module):
-    def __init__(self, image_size):
+    def __init__(self, image_size, args):
         super(Unet_ConvLSTM, self).__init__()
         self.image_size = image_size
         self.ndims = len(image_size)
@@ -97,9 +105,9 @@ class Unet_ConvLSTM(nn.Module):
         self.unet_flow = Conv(in_channels=self.unet.final_nf, out_channels=2, kernel_size=3, padding=1)
 
         # RNN
-        self.hidden_dim = 8
-        self.flow = Conv(in_channels=self.hidden_dim, out_channels=4, kernel_size=3, padding=1)
-        self.flow_2 = Conv(in_channels=4, out_channels=2, kernel_size=3, padding=1)
+        self.hidden_dim = args.rnn_hidden_dim
+        self.flow = Conv(in_channels=self.hidden_dim, out_channels=args.rnn_mid_flow_size, kernel_size=3, padding=1)
+        self.flow_2 = Conv(in_channels=args.rnn_mid_flow_size, out_channels=2, kernel_size=3, padding=1)
         self.rnn = ConvLSTM(img_size=image_size, input_dim=self.unet.final_nf, hidden_dim=self.hidden_dim,
                             kernel_size=(3, 3), bidirectional=False, return_sequence=True, batch_first=False)
 
@@ -221,7 +229,8 @@ def get_lr(optim):
     for param_group in optim.param_groups:
         return param_group['lr']
 
-model = Unet_ConvLSTM(dataloader.dataset.image_size)
+
+model = Unet_ConvLSTM(dataloader.dataset.image_size, args)
 model.to('cuda')
 
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -275,7 +284,7 @@ for epoch in range(args.initial_epoch, args.epochs):
         imgs = imgs.permute(1, 0, 2, 3).unsqueeze(2).to('cuda')
         lbs = lbs.permute(1, 0, 2, 3).unsqueeze(2).to('cuda')
 
-        loss, win_count, window, step = 0, 0, 4, 2
+        loss, win_count, window, step = 0, 0, args.window, args.step
         if args.multi_windows:
             if step == 0:
                 data_ft = zip(np.arange(0, num_layers - window), np.arange(window, num_layers))
