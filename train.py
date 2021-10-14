@@ -18,11 +18,11 @@ from utils.spatial_transform import SpatialTransformer
 # __________________________________________________________________________ ARGS and CONFIG
 class Args:
     def __init__(self):
-        self.SERVER = 168
-        self.model_id = 'y6'
-        self.model_description = '1p, Unet Rnn'
+        self.SERVER = 166
+        self.model_id = 'p3rnn'
+        self.model_description = '1p (p3) Unet Rnn'
         self.all_patients = False
-        self.one_patient = 1
+        self.one_patient = 3
         self.use_rnn = True
         self.multi_windows = True
         self.use_filtered_dataset = True
@@ -32,17 +32,17 @@ class Args:
         self.loss = 'mse'
         self.load_model = None   #'/home/khalili/kian-data/saved-models/x1/2500.pt'
         self.initial_epoch = 0   # to start from
-        self.save_every = 250
+        self.save_every = 1000
         self.cooldown_time = 0   # to decrease GPU temp
         self.lr_scheduler = 'ReduceLROnPlateau'
 
-        if self.use_rnn:
-            self.rnn_hidden_dim = 8
-            self.rnn_mid_flow_size = 4
+        # if rnn
+        self.rnn_hidden_dim = 8
+        self.rnn_mid_flow_size = 4
 
-        if self.multi_windows:
-            self.window = 4
-            self.step = 2
+        # if multi windows
+        self.window = 6
+        self.step = 3
 
         if self.lr_scheduler == 'ReduceLROnPlateau':
             self.lr_scheduler_args = {'mode': 'min', 'factor': 0.75, 'patience': 25, 'threshold': 0.0001}
@@ -55,7 +55,7 @@ class Args:
             self.saving_base = '/home/khalili/kian-data/saved-models/'
             self.data_base = '/home/khalili/kian-data/'
         elif self.SERVER == 166:
-            self.saving_base = '/HDD/kian/saved-models/DIR1/'
+            self.saving_base = '/HDD/kian/saved-models/bDir/'
             self.data_base = '/HDD/vxm-models/structured-data/'
         self.model_dir = f'{self.saving_base}{self.model_id}/'
 
