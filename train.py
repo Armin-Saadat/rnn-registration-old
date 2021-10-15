@@ -19,12 +19,12 @@ from utils.spatial_transform import SpatialTransformer
 class Args:
     def __init__(self):
         self.SERVER = 166
-        self.model_id = 'p3rnn'
-        self.model_description = '1p (p3) Unet Rnn'
+        self.model_id = 'p5'
+        self.model_description = 'unet patient 5'
         self.all_patients = False
-        self.one_patient = 3
-        self.use_rnn = True
-        self.multi_windows = True
+        self.one_patient = 5
+        self.use_rnn = False
+        self.multi_windows = False
         self.use_filtered_dataset = True
         self.lr = 5e-4
         self.epochs = 5000
