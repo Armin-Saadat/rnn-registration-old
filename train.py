@@ -22,9 +22,12 @@ class Args:
         self.model_id = 'p5'
         self.model_description = 'unet patient 5'
         self.all_patients = False
-        self.one_patient = 5
-        self.use_rnn = False
-        self.multi_windows = False
+        self.one_patient = 3
+        if not self.one_patient and not self.all_patients:
+            self.p_from = 0
+            self.p_to = 5
+        self.use_rnn = True
+        self.multi_windows = True
         self.use_filtered_dataset = True
         self.lr = 5e-4
         self.epochs = 5000
@@ -64,10 +67,17 @@ class Args:
         model_info += f'model:          {self.model_description}\n'
         model_info += f'___ model_dir:  {self.model_dir} ___\n\n'
         model_info += f'lr:             {self.lr}\n'
-        model_info += f'filtered imgs:   {self.use_filtered_dataset}\n'
+        model_info += f'use rnn:        {self.use_rnn}\n'
+        if self.use_rnn:
+            model_info += f'rnn hdim:       {self.rnn_hidden_dim}\n'
+            model_info += f'rnnMFS:         {self.rnn_mid_flow_size}'
+        model_info += f'filtered imgs:  {self.use_filtered_dataset}\n'
         model_info += f'all patients:   {self.all_patients}\n'
         model_info += f'one patient:    {self.one_patient}\n'
         model_info += f'multi windows:  {self.multi_windows}\n'
+        if self.multi_windows:
+            model_info += f'window:         {self.window}\n'
+            model_info += f'step:           {self.step}\n'
         model_info += f'epochs:         {self.epochs}\n'
         model_info += f'batch_size:     {self.batch_size}\n'
         model_info += f'loss:           {self.loss}\n'
@@ -217,10 +227,16 @@ def get_dataloader(images, labels, batch_size, shuffle=False, pin_memory=False, 
 
 if args.all_patients:
     dataloader = get_dataloader(images, labels, args.batch_size)
+    print(f'___dataloader filled with all data___')
 elif args.one_patient:
     dataloader = get_dataloader([images[args.one_patient]], [labels[args.one_patient]], args.batch_size)
+    print(f'___dataloader filled with patient number {args.one_patient}___')
+elif args.p_to:
+    dataloader = get_dataloader(images[args.p_from:args.p_to], labels[args.p_from:args.p_to], args.batch_size)
+    print(f"____dataloader filled with patients range: {args.p_from}: {args.p_to}____")
 else:
-    raise Exception(f"Ambiguity in Data set: all_patients: {args.all_patients}, one_patient: {args.one_patient}")
+    raise Exception(f"Ambiguity in Data set: all_patients: {args.all_patients}, one_patient: {args.one_patient}"
+                    f" p_from: {args.p_from}, p_to: {args.p_to}")
 
 
 
