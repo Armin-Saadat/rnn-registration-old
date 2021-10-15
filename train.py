@@ -19,10 +19,10 @@ from utils.spatial_transform import SpatialTransformer
 class Args:
     def __init__(self):
         self.SERVER = 166
-        self.model_id = 'p5'
-        self.model_description = 'unet patient 5'
+        self.model_id = 'p1to5-rnn'
+        self.model_description = 'rnn patients 1:5'
         self.all_patients = False
-        self.one_patient = 3
+        self.one_patient = False
         if not self.one_patient and not self.all_patients:
             self.p_from = 0
             self.p_to = 5
@@ -70,7 +70,7 @@ class Args:
         model_info += f'use rnn:        {self.use_rnn}\n'
         if self.use_rnn:
             model_info += f'rnn hdim:       {self.rnn_hidden_dim}\n'
-            model_info += f'rnnMFS:         {self.rnn_mid_flow_size}'
+            model_info += f'rnnMFS:         {self.rnn_mid_flow_size}\n'
         model_info += f'filtered imgs:  {self.use_filtered_dataset}\n'
         model_info += f'all patients:   {self.all_patients}\n'
         model_info += f'one patient:    {self.one_patient}\n'
