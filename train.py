@@ -1,4 +1,5 @@
 # __________________________________________________________________________________ IMPORTS
+import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 import torch
@@ -116,10 +117,12 @@ class Unet_ConvLSTM(nn.Module):
 
         # RNN
         self.hidden_dim = args.rnn_hidden_dim
-        self.flow = Conv(in_channels=self.hidden_dim, out_channels=args.rnn_mid_flow_size, kernel_size=3, padding=1)
-        self.flow_2 = Conv(in_channels=args.rnn_mid_flow_size, out_channels=2, kernel_size=3, padding=1)
+        self.f_flow = Conv(in_channels=self.hidden_dim, out_channels=args.rnn_mid_flow_size, kernel_size=3, padding=1)
+        self.f_flow_2 = Conv(in_channels=args.rnn_mid_flow_size, out_channels=2, kernel_size=3, padding=1)
+        self.b_flow = Conv(in_channels=self.hidden_dim, out_channels=args.rnn_mid_flow_size, kernel_size=3, padding=1)
+        self.b_flow_2 = Conv(in_channels=args.rnn_mid_flow_size, out_channels=2, kernel_size=3, padding=1)
         self.rnn = ConvLSTM(img_size=image_size, input_dim=self.unet.final_nf, hidden_dim=self.hidden_dim,
-                            kernel_size=(3, 3), bidirectional=False, return_sequence=True, batch_first=False)
+                            kernel_size=(3, 3), bidirectional=True, return_sequence=True, batch_first=False)
 
         self.spatial_transformer = SpatialTransformer(size=image_size)
 
@@ -136,10 +139,15 @@ class Unet_ConvLSTM(nn.Module):
         if use_rnn:
             forward_unet_out = torch.cat([self.unet(torch.cat([src, trg], dim=1)).unsqueeze(0)
                                           for src, trg in src_trg_zip], dim=0)
-            rnn_out, last_states, _ = self.rnn(forward_unet_out)
-            x = self.flow(rnn_out[0].squeeze(0))
+            rnn_out, last_states, inv_last_states = self.rnn(forward_unet_out)
+            x = self.f_flow(rnn_out[:args.rnn_hidden_dim].squeeze(0))
             x = torch.nn.functional.leaky_relu(x)
-            forward_flows = self.flow_2(x).unsqueeze(1)
+            forward_flows = self.f_flow_2(x).unsqueeze(1)
+
+            y = self.b_flow(rnn_out[args.rnn_hidden_dim:].squeeze(0))
+            y = torch.nn.functional.leaky_relu(y)
+            backward_flows = self.b_flow_2(y).unsqueeze(1)
+
         else:
             forward_flows = torch.cat([self.unet_flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0)
                                        for src, trg in src_trg_zip], dim=0)
@@ -148,36 +156,19 @@ class Unet_ConvLSTM(nn.Module):
             [self.spatial_transformer(src, flow).unsqueeze(0)
              for src, flow in zip(forward_sources, forward_flows[:])], dim=0)
 
+        if use_rnn:
+            backward_moved_images = torch.cat(
+                [self.spatial_transformer(src, flow).unsqueeze(0)
+                 for src, flow in zip(forward_moved_images, backward_flows[:])], dim=0)
+
         if labels is not None:
             forward_lbs_sources = labels[:-1]
             forward_moved_labels = torch.cat(
                 [self.spatial_transformer(src, flow).unsqueeze(0)
                  for src, flow in zip(forward_lbs_sources, forward_flows[:])], dim=0)
 
-        # Backward: registering slice i to i - 1
-        backward_sources, backward_targets = images[1:], images[:-1]
-        src_trg_zip = zip(backward_sources, backward_targets)
-        if use_rnn:
-            backward_unet_out = torch.cat([self.unet(torch.cat([src, trg], dim=1)).unsqueeze(0)
-                                           for src, trg in src_trg_zip], dim=0)
-            rnn_out, last_states, _ = self.rnn(backward_unet_out)
-            x = self.flow(rnn_out[0].squeeze(0))
-            x = torch.nn.functional.leaky_relu(x)
-            backward_flows = self.flow_2(x).unsqueeze(1)
-        else:
-            backward_flows = torch.cat([self.unet_flow(self.unet(torch.cat([src, trg], dim=1))).unsqueeze(0)
-                                        for src, trg in src_trg_zip], dim=0)
-
-        backward_moved_images = torch.cat(
-            [self.spatial_transformer(src, flow).unsqueeze(0)
-             for src, flow in zip(backward_sources, backward_flows[:])], dim=0)
-
         if labels is not None:
-            backward_lbs_sources = labels[1:]
-            backward_moved_labels = torch.cat(
-                [self.spatial_transformer(src, flow).unsqueeze(0)
-                 for src, flow in zip(backward_lbs_sources, backward_flows[:])], dim=0)
-            return forward_moved_images, forward_moved_labels, backward_moved_images, backward_moved_labels
+            return forward_moved_images, forward_moved_labels, backward_moved_images, None  # backward_moved_labels
         else:
             return forward_moved_images, backward_moved_images
 
@@ -310,7 +301,7 @@ for epoch in range(args.initial_epoch, args.epochs):
             data_ft = zip([0], [num_layers])
 
         for f, t in data_ft:
-            fmoved, fmoved_labels, bmoved, bmoved_labels = model(imgs[f:t], lbs[f:t], use_rnn=args.use_rnn)
+            fmoved, fmoved_labels, bmoved, _ = model(imgs[f:t], lbs[f:t], use_rnn=args.use_rnn)
             f_trgs, b_trgs = imgs[f:t][1:], imgs[f:t][:-1]
             loss += sim_loss_func(f_trgs, fmoved) + sim_loss_func(b_trgs, bmoved)
             win_count += 1

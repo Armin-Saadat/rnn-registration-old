@@ -179,7 +179,7 @@ class ConvLSTM(nn.Module):
         self.cell_fw = cell_fw
         
         if self.bidirectional is True:
-            cell_bw = ConvLSTMCell(img_size = img_size,
+            cell_bw = ConvLSTMCell(img_size=img_size,
                                      input_dim=input_dim,
                                      hidden_dim=hidden_dim,
                                      kernel_size=kernel_size,
@@ -217,7 +217,7 @@ class ConvLSTM(nn.Module):
             # if self.bidirectional is True:
             #     hidden_state_inv = self._init_hidden(batch_size=b)
 
-        ## LSTM forward direction
+        # LSTM forward direction
         input_fw = input_tensor
         h, c = hidden_state
         output_inner = []
@@ -230,9 +230,8 @@ class ConvLSTM(nn.Module):
         layer_output = [output_inner]
         last_state = [h, c]
         ####################
-        
-        
-        ## LSTM inverse direction
+
+        # LSTM inverse direction
         if self.bidirectional is True:
             input_inv = input_tensor
             h_inv, c_inv = hidden_state_inv
@@ -243,7 +242,7 @@ class ConvLSTM(nn.Module):
                 
                 output_inv.append(h_inv)
             output_inv.reverse() 
-            output_inv = torch.stack((output_inv), dim=1)
+            output_inv = torch.stack(output_inv, dim=1)
             layer_output = torch.cat((output_inner, output_inv), dim=2)
             last_state_inv = [h_inv, c_inv]
         ###################################
