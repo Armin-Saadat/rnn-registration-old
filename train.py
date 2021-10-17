@@ -37,40 +37,40 @@ class Args:
                        (server 168 doesn't need this).
         """
         self.SERVER = 166
-        self.model_id = 'p1-bidir-step1'
-        self.model_description = 'rnn, p1, bidir, dataset step 1'
-        self.all_patients = False
-        self.one_patient = 1
+        self.model_id = 'r1-b'
+        self.model_description = 'rnn, all, hdim=64, win=9'
+        self.all_patients = True
+        self.one_patient = False
         if not self.one_patient and not self.all_patients:
             self.p_from = 0
             self.p_to = 5
-        self.dataset_slice_step = 1
+        self.dataset_slice_step = 0
         self.use_rnn = True
         self.multi_windows = True
         self.use_filtered_dataset = True
         self.lr = 1e-4
-        self.epochs = 5000
+        self.epochs = 4000
         self.batch_size = 1
         self.loss = 'mse'
         self.load_model = None   # '/home/khalili/kian-data/saved-models/x1/2500.pt'
         self.initial_epoch = 0   # to start from
         self.save_every = 1000
-        self.cooldown_time = 1   # to decrease GPU temp
+        self.cooldown_time = 2   # to decrease GPU temp
         self.lr_scheduler = 'ReduceLROnPlateau'
 
         # if rnn
-        self.rnn_hidden_dim = 16
-        self.rnn_mid_flow_size = 8
+        self.rnn_hidden_dim = 64
+        self.rnn_mid_flow_size = 32
 
         # Forcing multi_windows to be false while training a pure Unet
         if not self.use_rnn:
             self.multi_windows = False
         # if multi windows
-        self.window = 6
+        self.window = 9
         self.step = 3
 
         if self.lr_scheduler == 'ReduceLROnPlateau':
-            self.lr_scheduler_args = {'mode': 'min', 'factor': 0.75, 'patience': 25, 'threshold': 0.0001}
+            self.lr_scheduler_args = {'mode': 'min', 'factor': 0.75, 'patience': 30, 'threshold': 0.0001}
         elif self.lr_scheduler == 'ExponentialLR':
             self.lr_scheduler_args = {'gamma': 0.995}
         else:
@@ -218,14 +218,14 @@ for pid, img in pre_images.items():
     for i, slc in enumerate(img):
         if i % bridge == 0:
             image_slices.append(slc / slc.max())  # Normalizing
-    images.append(torch.from_numpy(np.stack(image_slices, axis=0)))
+    images.append(torch.from_numpy(np.stack(image_slices, axis=0)).float())
 
 for pid, lbs in pre_labels.items():
     label_slices = []
     for i, slc in enumerate(lbs):
         if i % bridge == 0:
             label_slices.append(slc)
-    labels.append(torch.from_numpy(np.stack(label_slices, axis=0)))
+    labels.append(torch.from_numpy(np.stack(label_slices, axis=0)).float())
 
 
 # __________________________________________________________________________________ DATA LOADER
@@ -301,7 +301,8 @@ else:
 # _____________________________________________________________________________________ TRAINING
 loss_history, all_metrics = [], []
 for epoch in range(args.initial_epoch, args.epochs):
-
+    time.sleep(args.cooldown_time)
+    
     # Save model checkpoint and training metrics
     if (epoch + 1) % args.save_every == 0:
         print(f'------- lr: {get_lr(optimizer)} --------')
