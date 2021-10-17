@@ -62,6 +62,9 @@ class Args:
         self.rnn_hidden_dim = 16
         self.rnn_mid_flow_size = 8
 
+        # Forcing multi_windows to be false while training a pure Unet
+        if not self.use_rnn:
+            self.multi_windows = False
         # if multi windows
         self.window = 6
         self.step = 3
