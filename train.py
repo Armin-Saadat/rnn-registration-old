@@ -352,8 +352,8 @@ for epoch in range(args.initial_epoch, args.epochs):
         metrics = {
             'epoch': epoch,
             'epoch_loss': epoch_loss,
-            'sim_loss': sim_loss,
-            'bidir_loss': bidir_loss,
+            'sim_loss': sim_loss.item(),
+            'bidir_loss': bidir_loss.item(),
             'current_lr': get_lr(optimizer),
         }
         all_metrics.append(metrics)
