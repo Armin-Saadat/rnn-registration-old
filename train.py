@@ -213,19 +213,19 @@ else:
     bridge = args.dataset_slice_step + 1
 
 images, labels = [], []
-for i, img in pre_images.items():
-    if i % bridge == 0:
-        images.append(torch.from_numpy(img))
+for pid, img in pre_images.items():
+    image_slices = []
+    for i, slc in enumerate(img):
+        if i % bridge == 0:
+            image_slices.append(slc / slc.max())  # Normalizing
+    images.append(torch.from_numpy(np.stack(image_slices, axis=0)))
 
-for i, lb in pre_labels.items():
-    if i % bridge == 0:
-        labels.append(torch.from_numpy(lb))
-
-# Normalize
-for i, img in enumerate(images):
-    images[i] = (img/img.max()).float()
-for i, lb in enumerate(labels):
-    labels[i] = (lb/lb.max()).float()
+for pid, lbs in pre_labels.items():
+    label_slices = []
+    for i, slc in enumerate(lbs):
+        if i % bridge == 0:
+            label_slices.append(slc)
+    labels.append(torch.from_numpy(np.stack(label_slices, axis=0)))
 
 
 # __________________________________________________________________________________ DATA LOADER
