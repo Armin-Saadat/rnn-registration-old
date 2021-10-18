@@ -37,10 +37,10 @@ class Args:
                        (server 168 doesn't need this).
         """
         self.SERVER = 166
-        self.model_id = 'r1-b'
-        self.model_description = 'rnn, all, hdim=64, win=9'
-        self.all_patients = True
-        self.one_patient = False
+        self.model_id = 'rP1-2bidir'
+        self.model_description = 'rnn, p1, weight 2 for bidir loss, hdim=64, win=6,3'
+        self.all_patients = False
+        self.one_patient = 1
         if not self.one_patient and not self.all_patients:
             self.p_from = 0
             self.p_to = 5
@@ -54,7 +54,7 @@ class Args:
         self.loss = 'mse'
         self.load_model = None   # '/home/khalili/kian-data/saved-models/x1/2500.pt'
         self.initial_epoch = 0   # to start from
-        self.save_every = 1000
+        self.save_every = 500
         self.cooldown_time = 2   # to decrease GPU temp
         self.lr_scheduler = 'ReduceLROnPlateau'
 
