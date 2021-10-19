@@ -37,8 +37,8 @@ class Args:
                        (server 168 doesn't need this).
         """
         self.SERVER = 166
-        self.model_id = 'rP1-2bidir'
-        self.model_description = 'rnn, p1, weight 2 for bidir loss, hdim=64, win=6,3'
+        self.model_id = 'rP1-fl-d'
+        self.model_description = 'rnn.P1.w6-3. Hossein flow loss'
         self.all_patients = False
         self.one_patient = 1
         if not self.one_patient and not self.all_patients:
@@ -52,6 +52,7 @@ class Args:
         self.epochs = 4000
         self.batch_size = 1
         self.loss = 'mse'
+        self.bidir_loss_weight = 1
         self.load_model = None   # '/home/khalili/kian-data/saved-models/x1/2500.pt'
         self.initial_epoch = 0   # to start from
         self.save_every = 500
@@ -66,7 +67,7 @@ class Args:
         if not self.use_rnn:
             self.multi_windows = False
         # if multi windows
-        self.window = 9
+        self.window = 6
         self.step = 3
 
         if self.lr_scheduler == 'ReduceLROnPlateau':
@@ -103,6 +104,7 @@ class Args:
         model_info += f'epochs:         {self.epochs}\n'
         model_info += f'batch_size:     {self.batch_size}\n'
         model_info += f'loss:           {self.loss}\n'
+        model_info += f'bidir weight:   {self.bidir_loss_weight}\n'
         model_info += f'load_model:     {self.load_model}\n'
         model_info += f'initial epoch:  {self.initial_epoch}\n'
         model_info += f'save_every:     {self.save_every}\n'
@@ -196,7 +198,7 @@ class Unet_RNN(nn.Module):
             moved_labels = torch.cat(
                 [self.spatial_transformer(src, flow).unsqueeze(0)
                  for src, flow in zip(lbs_sources_, flows[:])], dim=0)
-            return moved_images_, moved_labels, backward_moved_images_
+            return moved_images_, moved_labels, backward_moved_images_, flows, backward_flows
         else:
             return moved_images_, backward_moved_images_
 
@@ -299,6 +301,7 @@ else:
 
 
 # _____________________________________________________________________________________ TRAINING
+bidir_weight = args.bidir_loss_weight
 loss_history, all_metrics = [], []
 for epoch in range(args.initial_epoch, args.epochs):
     time.sleep(args.cooldown_time)
@@ -337,10 +340,11 @@ for epoch in range(args.initial_epoch, args.epochs):
             data_ft = zip([0], [num_layers])
 
         for from_, to in data_ft:
-            moved_images, _, backward_moved_images = model(imgs[from_:to], lbs[from_:to], use_rnn=args.use_rnn)
+            moved_images, _, backward_moved_images, ff, bf = model(imgs[from_:to], lbs[from_:to], use_rnn=args.use_rnn)
             targets, sources = imgs[from_:to][1:], imgs[from_:to][:-1]
             sim_loss, bidir_loss = sim_loss_func(targets, moved_images), sim_loss_func(sources, backward_moved_images)
-            loss = sim_loss + bidir_loss
+            loss = sim_loss + (bidir_weight * bidir_loss)
+#             loss = torch.abs(ff + bf).sum()
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
