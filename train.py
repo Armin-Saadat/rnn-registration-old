@@ -26,6 +26,7 @@ class Args:
                       (all_patients and one_patient both must be False).
         data_set_slice_step: int, number of slices to exclude from data set between each two slices that are taken.
         use_rnn: bool, if false, model will be pure Unet.
+        depth: int (1 or 2), if 2, registering slice i to i + 2 additional to slice i, i + 1.
         multi_windows: bool, whether to split each 3D image into chunks of slices or not.
         use_filtered_dataset: bool, if true, all images in the dataset will have at least
                              one organ present in all slices.
@@ -46,6 +47,7 @@ class Args:
             self.p_to = 5
         self.dataset_slice_step = 0
         self.use_rnn = True
+        self.depth = 2
         self.multi_windows = True
         self.use_filtered_dataset = True
         self.lr = 1e-4
@@ -91,6 +93,7 @@ class Args:
         model_info += f'___ model_dir:  {self.model_dir} ___\n\n'
         model_info += f'lr:             {self.lr}\n'
         model_info += f'use rnn:        {self.use_rnn}\n'
+        model_info += f'depth:          {self.depth}\n'
         if self.use_rnn:
             model_info += f'rnn hdim:       {self.rnn_hidden_dim}\n'
             model_info += f'rnnMFS:         {self.rnn_mid_flow_size}\n'
@@ -139,6 +142,7 @@ class Unet_RNN(nn.Module):
         self.unet_downsize = Conv(in_channels=self.unet.final_nf, out_channels=2, kernel_size=3, padding=1)
 
         # RNN
+        self.depth = args.depth
         self.hidden_dim = args.rnn_hidden_dim
         self.downsize_conv_1 = Conv(in_channels=self.hidden_dim, out_channels=args.rnn_mid_flow_size, kernel_size=3, padding=1)
         self.downsize_conv_2 = Conv(in_channels=args.rnn_mid_flow_size, out_channels=2, kernel_size=3, padding=1)
@@ -155,7 +159,12 @@ class Unet_RNN(nn.Module):
         # shape of moved_images = (seq_size - 1, bs, 1, W, H)
 
         # Forward: registering slice i to i + 1
-        sources_, targets_ = images[:-1], images[1:]
+        if self.depth == 2:
+            sources_, targets_ = torch.cat((images[:-1], images[:-2]), dim=0), torch.cat((images[1:], images[2:]), dim=0)
+        elif self.depth == 1:
+            sources_, targets_ = images[:-1], images[1:]
+        else:
+            raise Exception("___depth should be either 1 or 2___")
         src_trg_zip = zip(sources_, targets_)
         if use_rnn:
             unet_out = torch.cat(
