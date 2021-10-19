@@ -207,9 +207,9 @@ class Unet_RNN(nn.Module):
             moved_labels = torch.cat(
                 [self.spatial_transformer(src, flow).unsqueeze(0)
                  for src, flow in zip(lbs_sources_, flows[:])], dim=0)
-            return moved_images_, moved_labels, backward_moved_images_, flows, backward_flows
+            return sources_, targets_, moved_images_, moved_labels, backward_moved_images_, flows, backward_flows
         else:
-            return moved_images_, backward_moved_images_
+            return sources_, targets_, moved_images_, backward_moved_images_
 
 
 # _____________________________________________________________________________ READING DATA
@@ -349,11 +349,10 @@ for epoch in range(args.initial_epoch, args.epochs):
             data_ft = zip([0], [num_layers])
 
         for from_, to in data_ft:
-            moved_images, _, backward_moved_images, ff, bf = model(imgs[from_:to], lbs[from_:to], use_rnn=args.use_rnn)
-            targets, sources = imgs[from_:to][1:], imgs[from_:to][:-1]
+            sources, targets, moved_images, _, backward_moved_images, ff, bf = model(imgs[from_:to], lbs[from_:to], use_rnn=args.use_rnn)
             sim_loss, bidir_loss = sim_loss_func(targets, moved_images), sim_loss_func(sources, backward_moved_images)
-            loss = sim_loss + (bidir_weight * bidir_loss)
 #             loss = torch.abs(ff + bf).sum()
+            loss = sim_loss + (bidir_weight * bidir_loss)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -363,14 +362,16 @@ for epoch in range(args.initial_epoch, args.epochs):
         patient_count += 1
 
     epoch_loss = float(epoch_loss) / window_count
+    sim_loss = float(sim_loss) / window_count
+    bidir_loss = float(bidir_loss) / window_count
     scheduler.step(epoch_loss)
 
     if epoch % 20 == 0:
         metrics = {
             'epoch': epoch,
             'epoch_loss': epoch_loss,
-            'sim_loss': sim_loss.item(),
-            'bidir_loss': bidir_loss.item(),
+            'sim_loss': sim_loss,
+            'bidir_loss': bidir_loss,
             'current_lr': get_lr(optimizer),
         }
         all_metrics.append(metrics)
