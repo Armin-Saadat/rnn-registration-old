@@ -38,8 +38,8 @@ class Args:
                        (server 168 doesn't need this).
         """
         self.SERVER = 166
-        self.model_id = 'rP1-fl-d'
-        self.model_description = 'rnn.P1.w6-3. Hossein flow loss'
+        self.model_id = 'rP1-d2'
+        self.model_description = 'rnn.P1.w6-3. depth=2'
         self.all_patients = False
         self.one_patient = 1
         if not self.one_patient and not self.all_patients:
