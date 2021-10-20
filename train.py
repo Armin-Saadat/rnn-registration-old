@@ -38,8 +38,8 @@ class Args:
                        (server 168 doesn't need this).
         """
         self.SERVER = 166
-        self.model_id = 'rP1-d2'
-        self.model_description = 'rnn.P1.w6-3. depth=2'
+        self.model_id = 'rP1-OnAll'
+        self.model_description = 'rP1, on top of pre-trained model r-all'
         self.all_patients = False
         self.one_patient = 1
         if not self.one_patient and not self.all_patients:
@@ -47,18 +47,18 @@ class Args:
             self.p_to = 5
         self.dataset_slice_step = 0
         self.use_rnn = True
-        self.depth = 2
+        self.depth = 1
         self.multi_windows = True
         self.use_filtered_dataset = True
-        self.lr = 1e-4
-        self.epochs = 4000
+        self.lr = 5e-4
+        self.epochs = 5000
         self.batch_size = 1
         self.loss = 'mse'
         self.bidir_loss_weight = 1
-        self.load_model = None   # '/home/khalili/kian-data/saved-models/x1/2500.pt'
-        self.initial_epoch = 0   # to start from
+        self.load_model = '/HDD/kian/saved-models/cDir/r-all/1000.pt'
+        self.initial_epoch = 0     # to start from
         self.save_every = 500
-        self.cooldown_time = 2   # to decrease GPU temp
+        self.cooldown_time = 1     # to decrease GPU temp
         self.lr_scheduler = 'ReduceLROnPlateau'
 
         # if rnn
