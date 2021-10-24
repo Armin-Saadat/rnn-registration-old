@@ -39,18 +39,12 @@ class Bottleneck(nn.Module):
         lstm_out, (h_n, c_n) = self.lstm(encoder_out.view(39, bs, -1))
         lstm_out = lstm_out.view(39, bs, 32, 16, 16)
 
-        Y = []
-        for i in range(T):
-            Y.append(self.unet(lstm_out[i], 'decode', X_history[i]).unsqueeze(0))
+        # shape of decoder_out: (39, bs, 16, 256, 256)
+        Y = [self.unet(lstm_out[i], 'decode', X_history[i]).unsqueeze(0) for i in range(T)]
         decoder_out = torch.cat(Y, dim=0)
-        print(decoder_out.shape)
-        exit()
-
-        # shape of unet_out: (39, bs, 16, 256, 256)
-
 
         # shape of convs_out: (39, 2, 32, 32)
-        convs_out = unet_out.squeeze(1)
+        convs_out = decoder_out.squeeze(1)
         for conv in self.convs:
             convs_out = conv(convs_out)
 
