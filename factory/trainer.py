@@ -2,7 +2,7 @@ import os
 import time
 import torch
 
-from path_definition import ROOT_DIR, OUTPUT_DIR
+from path_definition import OUTPUT_DIR
 
 
 class Trainer:
@@ -72,10 +72,8 @@ class Trainer:
 
     def setup_training_dir(self):
         os.makedirs(os.path.join(OUTPUT_DIR, self.args.id), exist_ok=False)
-        os.makedirs(os.path.join(OUTPUT_DIR, self.args.id, 'snapshots'), exist_ok=False)
-        os.makedirs(os.path.join(OUTPUT_DIR, self.args.id, 'plots'), exist_ok=False)
 
     def save_snapshot(self):
-        snapshot = {'model_state_dict': self.model.state_dict()}
-        torch.save(snapshot, os.path.join(ROOT_DIR, 'outputs', 'snapshots', '%03d.pt' % self.args.epochs))
+        snapshot = {'model_state_dict': self.model.state_dict(), 'args': self.args}
+        torch.save(snapshot, os.path.join(OUTPUT_DIR, self.args.id, '%03d.pt' % self.args.epochs))
         del snapshot
