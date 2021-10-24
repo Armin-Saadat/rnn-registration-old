@@ -35,8 +35,9 @@ class Dataset_(Dataset):
         return tuple(outputs)
 
 
-def get_dataloader(batch_size, shuffle=False, pin_memory=False, workers=0):
+def get_dataloader(batch_size, shuffle=False, pin_memory=False, num_workers=0):
     dataset = Dataset_()
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, pin_memory=pin_memory, num_workers=workers)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, pin_memory=pin_memory,
+                            num_workers=num_workers)
 
     return dataloader
