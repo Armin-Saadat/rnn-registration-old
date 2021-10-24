@@ -71,11 +71,11 @@ class Trainer:
             print(msg, flush=True)
 
     def setup_training_dir(self):
-        os.makedirs(os.path.join(OUTPUT_DIR, 'snapshots'), exist_ok=False)
-        os.makedirs(os.path.join(parent_dir, 'plots'), exist_ok=False)
-        os.makedirs(os.path.join(parent_dir, 'metrics_history'), exist_ok=False)
+        os.makedirs(os.path.join(OUTPUT_DIR, self.args.id), exist_ok=False)
+        os.makedirs(os.path.join(OUTPUT_DIR, self.args.id, 'snapshots'), exist_ok=False)
+        os.makedirs(os.path.join(OUTPUT_DIR, self.args.id, 'plots'), exist_ok=False)
 
+    def save_snapshot(self):
         snapshot = {'model_state_dict': self.model.state_dict()}
         torch.save(snapshot, os.path.join(ROOT_DIR, 'outputs', 'snapshots', '%03d.pt' % self.args.epochs))
         del snapshot
-
