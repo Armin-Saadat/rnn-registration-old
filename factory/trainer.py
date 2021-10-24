@@ -79,6 +79,7 @@ class Trainer:
 
     def setup_training_dir(self):
         os.makedirs(os.path.join(OUTPUT_DIR, self.args.id), exist_ok=False)
+        os.makedirs(os.path.join(OUTPUT_DIR, self.args.id, 'visualization'), exist_ok=False)
 
     def save_snapshot(self):
         snapshot = {'model_state_dict': self.model.state_dict()}

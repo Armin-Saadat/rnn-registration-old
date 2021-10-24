@@ -39,4 +39,5 @@ class Visualizer:
         titles = ['moving', 'moved', 'fixed']
         ne.plot.slices(pics, titles=titles, cmaps=['gray'], do_colorbars=True,
                        imshow_args=[{'origin': 'lower'}],
-                       save_path=os.path.join(OUTPUT_DIR, self.args.id, slice + type + '.png'));
+                       save_path=os.path.join(OUTPUT_DIR, self.args.id, 'visualization', slice + type + '.png'),
+                       show=False);
