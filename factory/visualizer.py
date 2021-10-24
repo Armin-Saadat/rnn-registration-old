@@ -1,8 +1,5 @@
-import os
+import neurite as ne
 import torch
-import numpy as np
-
-from path_definition import OUTPUT_DIR
 
 
 class Visualizer:
@@ -25,5 +22,14 @@ class Visualizer:
             with torch.no_grad():
                 moved_imgs, moved_lbs, flows = self.model(imgs, lbs)
 
+                for s in eval(self.args.slices):
 
 
+
+    def __visualize(self, images, labels, slice_idx):
+        image = images[slice_idx].detach().cpu().numpy()
+        label = labels[slice_idx].detach().cpu().numpy()
+        pics = [image, label]
+        titles = ['image', 'label']
+        ne.plot.slices(pics, titles=titles, cmaps=['gray'], do_colorbars=True,
+                       imshow_args=[{'origin': 'lower'}]);

@@ -25,6 +25,7 @@ if __name__ == '__main__':
     parser.add_argument('-id', type=str, help='id of your experiment.')
     parser.add_argument('-snapshot', type=str, help='name of the saved snapshot.')
     parser.add_argument('-patient_idx', type=int, help='index of the data.')
+    parser.add_argument('-slices', type=str, help='slices to visualize.')
     parser.add_argument('-device', type=str, default='cuda', help='cpu or cuda')
     args = parser.parse_args()
 
