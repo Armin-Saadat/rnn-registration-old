@@ -42,6 +42,7 @@ class Evaluator:
 
                 dice_score.append((-self.dice_loss(fixed_lbs_, moved_lbs_)).detach().cpu().numpy())
 
+        print('mean: ' + str(np.mean(dice_score)) + ' , std: ' + str(np.std(dice_score)))
         f = open(os.path.join(OUTPUT_DIR, self.args.id, 'eval.txt'), "w")
         f.write('mean: ' + str(np.mean(dice_score)) + ' , std: ' + str(np.std(dice_score)))
         f.close()
