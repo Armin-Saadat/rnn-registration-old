@@ -5,7 +5,7 @@ import torch
 from utils.dataloader import get_dataloader
 from models.bottleneck import Bottleneck
 from path_definition import OUTPUT_DIR
-
+from factory.visualizer import Visualizer
 
 
 def run(args):
@@ -16,8 +16,8 @@ def run(args):
     model.load_state_dict(snapshot['model_state_dict'])
     model = model.to(args.device)
 
-    evaluator = Evaluator(args, model, dataloader)
-    evaluator.evaluate()
+    visualizer = Visualizer(args, model, dataloader)
+    visualizer.visualize()
 
 
 if __name__ == '__main__':
