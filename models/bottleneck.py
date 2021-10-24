@@ -15,7 +15,9 @@ class Bottleneck(nn.Module):
         dec_nf = [32, 32, 32, 32, 32, 16, 16]
         self.unet = Unet2(inshape=image_size, infeats=2, nb_features=[enc_nf, dec_nf])
 
-        self.lstm = nn.LSTM(input_size=32 * 16 * 16, hidden_size=32 * 16 * 16, batch_first=False)
+        self.input_size = 32 * 16 * 16
+        self.hidden_size = 32 * 16 * 16
+        self.lstm = nn.LSTM(input_size=self.input_size, hidden_size=self.hidden_size, batch_first=False)
 
         Conv = getattr(nn, 'Conv%dd' % self.ndims)
         self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1)
@@ -38,8 +40,9 @@ class Bottleneck(nn.Module):
         encoder_out = torch.cat(X, dim=0)
 
         # shape of lstm_out: (39, bs, 32, 16, 16)
-        h_0 = torch.randn(1, bs, 32 * 16 * 16)
-        c_0 = torch.randn(1, bs, 32 * 16 * 16)
+        device = 'cuda' if images.is_cuda else 'cpu'
+        h_0 = torch.randn(1, bs, self.hidden_size).to(device)
+        c_0 = torch.randn(1, bs, self.hidden_size).to(device)
         lstm_out, (h_n, c_n) = self.lstm(encoder_out.view(39, bs, -1), (h_0, c_0))
         lstm_out = lstm_out.view(39, bs, 32, 16, 16)
 
