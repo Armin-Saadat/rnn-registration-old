@@ -26,8 +26,8 @@ class Visualizer:
                 moved_imgs, moved_lbs, flows = self.model(imgs, lbs)
 
                 for s in eval(self.args.slices):
-                    self.__visualize(imgs[s, 0, 0], moved_imgs[s, 0, 0], imgs[s + 1, 0, 0], slice=str(s), type='img')
-                    self.__visualize(lbs[s, 0, 0], moved_lbs[s, 0, 0], lbs[s + 1, 0, 0], slice=str(s), type='lb')
+                    self.__visualize(imgs[s, 0, 0], moved_imgs[s, 0, 0], imgs[s + 1, 0, 0], slice=str(s), type='_img')
+                    self.__visualize(lbs[s, 0, 0], moved_lbs[s, 0, 0], lbs[s + 1, 0, 0], slice=str(s), type='_lb')
 
             break
 
