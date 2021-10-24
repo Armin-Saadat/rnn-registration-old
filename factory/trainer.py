@@ -43,7 +43,7 @@ class Trainer:
                     smooth_loss = self.smooth_loss(zero_phi, flow[:, i])
                     seg_loss = self.seg_loss(lbs[1:, i], moved_lbs[:, i])
                     loss = (self.args.sim_w * sim_loss) + (self.args.smooth_w * smooth_loss) + (
-                                self.args.seg_w * seg_loss)
+                            self.args.seg_w * seg_loss)
 
                 # backpropagate and optimize
                 self.optimizer.zero_grad()
@@ -57,16 +57,12 @@ class Trainer:
                 epoch_seg_loss += seg_loss * bs
                 epoch_data_n += bs
 
-                # print epoch info
-                loss_history.append(epoch_loss / total_data_count)
-                msg = 'epoch %d/%d, ' % (epoch + 1, args.epochs)
-                msg += 'loss= %.4e, ' % (epoch_loss / total_data_count)
-                msg += 'sim_loss= %.4e, ' % (epoch_loss_sim / total_data_count)
-                msg += 'smooth_loss= %.4e, ' % (epoch_loss_smooth / total_data_count)
-                msg += 'seg_loss= %.4e, ' % (epoch_loss_seg / total_data_count)
-                msg += 'time= %.4f, ' % (time.time() - epoch_start_time)
-                print(msg, flush=True)
-
-    def __train(self):
-
-
+            # print epoch info
+            loss_history.append(epoch_loss / epoch_data_n)
+            msg = 'epoch %d/%d, ' % (epoch + 1, self.args.epochs)
+            msg += 'loss= %.4e, ' % (epoch_loss / epoch_data_n)
+            msg += 'sim_loss= %.4e, ' % (epoch_sim_loss / epoch_data_n)
+            msg += 'smooth_loss= %.4e, ' % (epoch_smooth_loss / epoch_data_n)
+            msg += 'seg_loss= %.4e, ' % (epoch_seg_loss / epoch_data_n)
+            msg += 'time= %.4f, ' % (time.time() - epoch_start_time)
+            print(msg, flush=True)
