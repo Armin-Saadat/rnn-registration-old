@@ -16,7 +16,7 @@ def run(args):
     model.load_state_dict(snapshot['model_state_dict'])
     model = model.to(args.device)
 
-    evaluator = Evaluator(args.id, model, dataloader)
+    evaluator = Evaluator(args, model, dataloader)
     evaluator.evaluate()
 
 
