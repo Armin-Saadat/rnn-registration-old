@@ -38,7 +38,9 @@ class Bottleneck(nn.Module):
         encoder_out = torch.cat(X, dim=0)
 
         # shape of lstm_out: (39, bs, 32, 16, 16)
-        lstm_out, (h_n, c_n) = self.lstm(encoder_out.view(39, bs, -1))
+        h_0 = torch.randn(1, bs, 32 * 16 * 16)
+        c_0 = torch.randn(1, bs, 32 * 16 * 16)
+        lstm_out, (h_n, c_n) = self.lstm(encoder_out.view(39, bs, -1), (h_0, c_0))
         lstm_out = lstm_out.view(39, bs, 32, 16, 16)
 
         # shape of decoder_out: (39, bs, 16, 256, 256)
