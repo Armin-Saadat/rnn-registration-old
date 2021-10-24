@@ -17,8 +17,14 @@ class Trainer:
         self.seg_loss = seg_loss
 
     def train(self):
+        self.setup_training_dir()
+        self.__train()
+        self.save_snapshot()
+        self.save_plot()
 
-        loss_history = []
+    def __train(self):
+
+        self.loss_history = []
         zero_phi = torch.zeros(39, 2, 256, 256).float().to(self.args.device)
 
         for epoch in range(self.args.epochs):
@@ -62,7 +68,7 @@ class Trainer:
                 epoch_data_n += bs
 
             # print epoch info
-            loss_history.append(epoch_loss / epoch_data_n)
+            self.loss_history.append(epoch_loss / epoch_data_n)
             msg = 'epoch %d/%d, ' % (epoch + 1, self.args.epochs)
             msg += 'loss= %.4e, ' % (epoch_loss / epoch_data_n)
             msg += 'sim_loss= %.4e, ' % (epoch_sim_loss / epoch_data_n)
@@ -79,10 +85,9 @@ class Trainer:
         torch.save(snapshot, os.path.join(OUTPUT_DIR, self.args.id, '%03d.pt' % self.args.epochs))
         del snapshot
 
-    def save_plot(self, loss_history):
-        plt.plot(loss_history)
+    def save_plot(self):
+        plt.plot(self.loss_history)
         plt.xlabel('epoch')
         plt.ylabel('loss')
-        plt.show()
-        plt.savefig(os.path.join(save_dir, 'plots', key + '.png'))
+        plt.savefig(os.path.join(OUTPUT_DIR, self.args.id, 'loss.png'))
         plt.close()
