@@ -1,6 +1,5 @@
-import neurite as ne
-
-from dataloader import get_dataloader
+from utils.dataloader import get_dataloader
+from utils.visualizer import visualize
 
 if __name__ == '__main__':
     batch_size = 1
@@ -10,5 +9,6 @@ if __name__ == '__main__':
 
     dataloader = get_dataloader(batch_size, shuffle, pin_memory, num_workers)
     for images, labels in dataloader:
+        visualize(images, labels)
 
 
