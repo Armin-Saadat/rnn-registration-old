@@ -5,15 +5,19 @@ import torch
 from utils.dataloader import get_dataloader
 from models.bottleneck import Bottleneck
 from path_definition import OUTPUT_DIR
-from utils.losses import NCC, MSE, Grad
+from factory.evaluator import Evaluator
 
 
 def run(args):
     dataloader = get_dataloader(args.batch_size, args.shuffle, args.pin_memory, args.num_workers)
-    model = Bottleneck(dataloader.dataset.image_size).to(args.device)
     snapshot_path = os.path.join(OUTPUT_DIR, args.snapshot)
     snapshot = torch.load(snapshot_path, map_location='cpu')
+    model = Bottleneck(dataloader.dataset.image_size)
     model.load_state_dict(snapshot['model_state_dict'])
+    model = model.to(args.device)
+
+    evaluator = Evaluator(1, model, dataloader)
+    evaluator.evaluate()
 
 
 if __name__ == '__main__':
