@@ -4,32 +4,18 @@ import torch
 from utils.dataloader import get_dataloader
 from models.bottleneck import Bottleneck
 from utils.losses import NCC, MSE, Grad
+from factory.trainer import Trainer
 
 
 def run(args):
     dataloader = get_dataloader(args.batch_size, args.shuffle, args.pin_memory, args.num_workers)
     model = Bottleneck(dataloader.dataset.image_size).to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    sim_loss = NCC().loss if args.loss == 'ncc' else MSE().loss
+    smooth_loss = Grad('l2').loss
+    seg_loss = MSE().loss
 
-    if args.loss == 'ncc':
-        sim_loss_func = NCC().loss
-    elif args.loss == 'mse':
-        sim_loss_func = MSE().loss
-    else:
-        raise ValueError('Image loss should be either "mse" or "ncc", but found "%s"' % args.loss_type)
-
-
-
-    smooth_loss_func = Grad('l2').loss
-    smooth_weight = args.smooth_w
-
-    seg_loss_func = MSE().loss
-    seg_weight = args.seg_w
-
-    for images, labels in dataloader:
-        images = images.permute(1, 0, 2, 3).unsqueeze(2).to(args.device)
-        labels = labels.permute(1, 0, 2, 3).unsqueeze(2).to(args.device)
-        model(images, labels)
+    trainer = Trainer(args, model, dataloader, optimizer, sim_loss, smooth_loss, seg_loss)
 
 
 if __name__ == '__main__':
