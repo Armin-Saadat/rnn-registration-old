@@ -1,5 +1,8 @@
+import os
 import neurite as ne
 import torch
+
+from path_definition import OUTPUT_DIR
 
 
 class Visualizer:
@@ -23,17 +26,17 @@ class Visualizer:
                 moved_imgs, moved_lbs, flows = self.model(imgs, lbs)
 
                 for s in eval(self.args.slices):
-                    self.__visualize(imgs[s, 0, 0], moved_imgs[s, 0, 0], imgs[s + 1, 0, 0])
-                    self.__visualize(lbs[s, 0, 0], moved_lbs[s, 0, 0], lbs[s + 1, 0, 0])
+                    self.__visualize(imgs[s, 0, 0], moved_imgs[s, 0, 0], imgs[s + 1, 0, 0], slice=str(s), type='img')
+                    self.__visualize(lbs[s, 0, 0], moved_lbs[s, 0, 0], lbs[s + 1, 0, 0], slice=str(s), type='lb')
 
             break
 
-    @staticmethod
-    def __visualize(moving, moved, fixed):
+    def __visualize(self, moving, moved, fixed, slice, type):
         moving = moving.detach().cpu().numpy()
         moved = moved.detach().cpu().numpy()
         fixed = fixed.detach().cpu().numpy()
         pics = [moving, moved, fixed]
         titles = ['moving', 'moved', 'fixed']
         ne.plot.slices(pics, titles=titles, cmaps=['gray'], do_colorbars=True,
-                       imshow_args=[{'origin': 'lower'}]);
+                       imshow_args=[{'origin': 'lower'}],
+                       save_path=os.path.join(OUTPUT_DIR, self.args.id, slice + type + '.png'));
