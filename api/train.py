@@ -36,6 +36,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.id is None:
-        raise Exception('Please specify and id for your run.')
+        raise Exception('Please specify an ID for your run.')
 
     run(args)
