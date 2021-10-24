@@ -11,9 +11,9 @@ class Dataset_(Dataset):
     def __init__(self):
 
         # read from file
-        with open(os.path.join(DATA_DIR, 'images'), 'rb') as f:
+        with open(os.path.join(DATA_DIR, 'images_check'), 'rb') as f:
             images = pickle.load(f)
-        with open(os.path.join(DATA_DIR, 'labels'), 'rb') as f:
+        with open(os.path.join(DATA_DIR, 'labels_check'), 'rb') as f:
             labels = pickle.load(f)
 
         # normalize
