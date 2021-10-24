@@ -26,6 +26,8 @@ class Visualizer:
                     self.__visualize(imgs[s, 0, 0], moved_imgs[s, 0, 0], imgs[s + 1, 0, 0])
                     self.__visualize(lbs[s, 0, 0], moved_lbs[s, 0, 0], lbs[s + 1, 0, 0])
 
+            break
+
     @staticmethod
     def __visualize(moving, moved, fixed):
         moving = moving.detach().cpu().numpy()
