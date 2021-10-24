@@ -1,5 +1,8 @@
+import os
 import time
 import torch
+
+from path_definition import ROOT_DIR, OUTPUT_DIR
 
 
 class Trainer:
@@ -66,3 +69,13 @@ class Trainer:
             msg += 'seg_loss= %.4e, ' % (epoch_seg_loss / epoch_data_n)
             msg += 'time= %.4f, ' % (time.time() - epoch_start_time)
             print(msg, flush=True)
+
+    def setup_training_dir(self):
+        os.makedirs(os.path.join(OUTPUT_DIR, 'snapshots'), exist_ok=False)
+        os.makedirs(os.path.join(parent_dir, 'plots'), exist_ok=False)
+        os.makedirs(os.path.join(parent_dir, 'metrics_history'), exist_ok=False)
+
+        snapshot = {'model_state_dict': self.model.state_dict()}
+        torch.save(snapshot, os.path.join(ROOT_DIR, 'outputs', 'snapshots', '%03d.pt' % self.args.epochs))
+        del snapshot
+

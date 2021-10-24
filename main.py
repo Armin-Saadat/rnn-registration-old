@@ -20,6 +20,7 @@ def run(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='args')
+    parser.add_argument('-id', type=str, help='name or number of the experiment')
     parser.add_argument('-lr', type=float, default=0.001, help='learning-rate')
     parser.add_argument('-epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('-sim_w', type=float, default=1, help='weight of similarity-loss')
@@ -32,5 +33,8 @@ if __name__ == '__main__':
     parser.add_argument('-pin_memory', type=bool, default=False, help='pin_memory')
     parser.add_argument('-num_workers', type=int, default=0, help='num_workers')
     args = parser.parse_args()
+
+    if args.id is None:
+        raise Exception('Please specify and id for your run.')
 
     run(args)
