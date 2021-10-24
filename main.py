@@ -10,4 +10,4 @@ if __name__ == '__main__':
 
     dataloader = get_dataloader(batch_size, shuffle, pin_memory, num_workers)
     for images, labels in dataloader:
-        visualize(images, labels)
+        visualize(images, labels, 15)
