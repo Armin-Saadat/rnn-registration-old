@@ -81,7 +81,7 @@ class Trainer:
         os.makedirs(os.path.join(OUTPUT_DIR, self.args.id), exist_ok=False)
 
     def save_snapshot(self):
-        snapshot = {'model_state_dict': self.model.state_dict(), 'args': self.args}
+        snapshot = {'model_state_dict': self.model.state_dict()}
         torch.save(snapshot, os.path.join(OUTPUT_DIR, self.args.id, '%03d.pt' % self.args.epochs))
         del snapshot
 
