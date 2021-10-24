@@ -1,5 +1,6 @@
 import os
 import time
+import matplotlib.pyplot as plt
 import torch
 
 from path_definition import OUTPUT_DIR
@@ -77,3 +78,11 @@ class Trainer:
         snapshot = {'model_state_dict': self.model.state_dict(), 'args': self.args}
         torch.save(snapshot, os.path.join(OUTPUT_DIR, self.args.id, '%03d.pt' % self.args.epochs))
         del snapshot
+
+    def save_plot(self, loss_history):
+        plt.plot(loss_history)
+        plt.xlabel('epoch')
+        plt.ylabel('loss')
+        plt.show()
+        plt.savefig(os.path.join(save_dir, 'plots', key + '.png'))
+        plt.close()
