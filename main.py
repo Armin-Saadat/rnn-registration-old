@@ -6,13 +6,11 @@ from models.bottleneck import Bottleneck
 
 def run(args):
     dataloader = get_dataloader(args.batch_size, args.shuffle, args.pin_memory, args.num_workers)
-    model = Bottleneck(dataloader.dataset.image_size)
+    model = Bottleneck(dataloader.dataset.image_size).to(args.device)
 
     for images, labels in dataloader:
         images = images.permute(1, 0, 2, 3).unsqueeze(2).to(args.device)
         labels = labels.permute(1, 0, 2, 3).unsqueeze(2).to(args.device)
-        print(args.num_workers)
-        exit()
         model(images)
 
 

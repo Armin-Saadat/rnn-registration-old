@@ -17,9 +17,11 @@ class Bottleneck(nn.Module):
 
         self.lstm = nn.LSTM(input_size=32 * 16 * 16, hidden_size=32 * 16 * 16, batch_first=False)
 
-        # self.fc = nn.Linear(2 * 32 * 32, 2 * 256 * 256)
-        #
-        # self.spatial_transformer = SpatialTransformer(size=image_size)
+        Conv = getattr(nn, 'Conv%dd' % self.ndims)
+        self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1)
+
+        self.fc = nn.Linear(2 * 32 * 32, 2 * 256 * 256)
+        self.spatial_transformer = SpatialTransformer(size=image_size)
 
     def forward(self, images, labels=None):
         # shape of imgs/lbs: (40, bs, 1, 256, 256)
@@ -36,40 +38,26 @@ class Bottleneck(nn.Module):
         encoder_out = torch.cat(X, dim=0)
 
         # shape of lstm_out: (39, bs, 32, 16, 16)
-        lstm_out, (h_n, c_n) = self.lstm(encoder_out.view(39, bs, -1))
+        h_0 = torch.randn(1, bs, 32 * 16 * 16)
+        c_0 = torch.randn(1, bs, 32 * 16 * 16)
+        lstm_out, (h_n, c_n) = self.lstm(encoder_out.view(39, bs, -1), (h_0, c_0))
         lstm_out = lstm_out.view(39, bs, 32, 16, 16)
 
-        Y = []
-        for i in range(T):
-            Y.append(self.unet(lstm_out[i], 'decode', X_history[i]).unsqueeze(0))
-        decoder_out = torch.cat(Y, dim=0)
-        print(decoder_out.shape)
-        exit()
+        # shape of decoder_out: (39, bs, 16, 256, 256)
+        # shape of flow: (39, bs, 2, 256, 256)
+        Y = [self.flow(self.unet(lstm_out[i], 'decode', X_history[i])).unsqueeze(0) for i in range(T)]
+        flow = torch.cat(Y, dim=0)
 
-        # shape of unet_out: (39, bs, 16, 256, 256)
-
-
-        # shape of convs_out: (39, 2, 32, 32)
-        convs_out = unet_out.squeeze(1)
-        for conv in self.convs:
-            convs_out = conv(convs_out)
-
-        # shape of rnn_out: (39, bs, 2*32*32)
-        rnn_out, (h1, c1) = self.rnn(convs_out.view(39, 1, -1))
-
-        # shape of flows: (39, bs, 2, 256, 256)
-        flows = self.fc(rnn_out.view(39, -1)).view(39, 1, 2, 256, 256)
-
-        # shape of moved_images = (seq_len - 1, bs, 1, W, H)
+        # shape of moved_images = (39, bs, 1, 256, 256)
         moved_images = torch.cat(
-            [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(images[:-1], flows[:])], dim=0)
+            [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(images[:-1], flow)], dim=0)
 
         if labels is not None:
             moved_labels = torch.cat(
-                [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(labels[:-1], flows[:])], dim=0)
-            return [moved_images, moved_labels, flows]
+                [self.spatial_transformer(src, flow).unsqueeze(0) for src, flow in zip(labels[:-1], flow)], dim=0)
+            return [moved_images, moved_labels, flow]
         else:
-            return [moved_images, flows]
+            return [moved_images, flow]
 
 
 class Unet2(nn.Module):
