@@ -16,6 +16,7 @@ def run(args):
     seg_loss = MSE().loss
 
     trainer = Trainer(args, model, dataloader, optimizer, sim_loss, smooth_loss, seg_loss)
+    trainer.train()
 
 
 if __name__ == '__main__':
