@@ -15,29 +15,39 @@ class Bottleneck(nn.Module):
         dec_nf = [32, 32, 32, 32, 32, 16, 16]
         self.unet = Unet2(inshape=image_size, infeats=2, nb_features=[enc_nf, dec_nf])
 
-        # self.rnn = nn.LSTM(input_size=32 * 32 * 2, hidden_size=32 * 32 * 2, batch_first=False)
-        #
+        self.lstm = nn.LSTM(input_size=32 * 16 * 16, hidden_size=32 * 16 * 16, batch_first=False)
+
         # self.fc = nn.Linear(2 * 32 * 32, 2 * 256 * 256)
         #
         # self.spatial_transformer = SpatialTransformer(size=image_size)
 
     def forward(self, images, labels=None):
-
         # shape of imgs/lbs: (40, bs, 1, 256, 256)
-        # shape of unet_out: (39, bs, 16, 256, 256)
+        T, bs = images.shape[0] - 1, images.shape[1]
+        assert bs == 1, "batch-size must be one."
+        assert T == 39, "sequence must be consisted of 40 slices."
 
-        src, trg = images[0], images[1]
-        inp = torch.cat((src, trg), dim=1)
-        print(inp.shape)
-        a = self.unet(inp, 'encode')
-        print(a.shape)
+        # shape of encoder_out: (39, bs, 32, 16, 16)
+        X, X_history = [], []
+        for src, trg in zip(images[:-1], images[1:]):
+            x, x_history = self.unet(torch.cat([src, trg], dim=1), 'encode')
+            X.append(x.unsqueeze(0))
+            X_history.append(x_history)
+        encoder_out = torch.cat(X, dim=0)
+
+        # shape of lstm_out: (39, bs, 32, 16, 16)
+        lstm_out, (h_n, c_n) = self.lstm(encoder_out.view(39, bs, -1))
+        lstm_out = lstm_out.view(39, bs, 32, 16, 16)
+
+        Y = []
+        for i in range(T):
+            Y.append(self.unet(lstm_out[i], 'decode', X_history[i]).unsqueeze(0))
+        decoder_out = torch.cat(Y, dim=0)
+        print(decoder_out.shape)
         exit()
 
-        unet_out = torch.cat(
-            [self.unet(torch.cat([src, trg], dim=1)).unsqueeze(0)
-             for src, trg in zip(images[:-1], images[1:])], dim=0)
+        # shape of unet_out: (39, bs, 16, 256, 256)
 
-        assert unet_out.shape[1] == 1, "batch-size must be one"
 
         # shape of convs_out: (39, 2, 32, 32)
         convs_out = unet_out.squeeze(1)
