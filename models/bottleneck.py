@@ -22,7 +22,6 @@ class Bottleneck(nn.Module):
         Conv = getattr(nn, 'Conv%dd' % self.ndims)
         self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1)
 
-        self.fc = nn.Linear(2 * 32 * 32, 2 * 256 * 256)
         self.spatial_transformer = SpatialTransformer(size=image_size)
 
     def forward(self, images, labels=None):
