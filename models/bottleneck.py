@@ -11,12 +11,15 @@ class Bottleneck(nn.Module):
         self.image_size = image_size
         self.ndims = len(image_size)
 
-        enc_nf = [16, 32, 32, 32]
-        dec_nf = [32, 32, 32, 32, 32, 16, 16]
+        enc_nf = [16, 32, 32, 32, 64]
+        dec_nf = [32, 32, 32, 32, 32, 16, 16, 8, 2]
         self.unet = Unet2(inshape=image_size, infeats=2, nb_features=[enc_nf, dec_nf])
 
-        self.input_size = 32 * 16 * 16
-        self.hidden_size = 32 * 16 * 16
+        C = enc_nf[-1]
+        W = image_size[0] / (2 ** len(enc_nf))
+        H = image_size[1] / (2 ** len(enc_nf))
+        self.input_size = C * W * H
+        self.hidden_size = C * W * H
         self.lstm = nn.LSTM(input_size=self.input_size, hidden_size=self.hidden_size, batch_first=False)
 
         Conv = getattr(nn, 'Conv%dd' % self.ndims)
@@ -26,11 +29,8 @@ class Bottleneck(nn.Module):
 
     def forward(self, images, labels=None):
         # shape of imgs/lbs: (40, bs, 1, 256, 256)
-        T, bs = images.shape[0] - 1, images.shape[1]
-        assert bs == 1, "batch-size must be one."
-        assert T == 39, "sequence must be consisted of 40 slices."
 
-        # shape of encoder_out: (39, bs, 32, 16, 16)
+        # shape of encoder_out: (T, bs, C, W, H)
         X, X_history = [], []
         for src, trg in zip(images[:-1], images[1:]):
             x, x_history = self.unet(torch.cat([src, trg], dim=1), 'encode')
@@ -38,16 +38,21 @@ class Bottleneck(nn.Module):
             X_history.append(x_history)
         encoder_out = torch.cat(X, dim=0)
 
-        # shape of lstm_out: (39, bs, 32, 16, 16)
+        T, bs, C, W, H = encoder_out.shape
+        assert bs == 1
+        assert T == 39
+
+        # shape of lstm_out: (T, bs, C, W, H)
         device = 'cuda' if images.is_cuda else 'cpu'
         h_0 = torch.randn(1, bs, self.hidden_size).to(device)
         c_0 = torch.randn(1, bs, self.hidden_size).to(device)
-        lstm_out, (h_n, c_n) = self.lstm(encoder_out.view(39, bs, -1), (h_0, c_0))
-        lstm_out = lstm_out.view(39, bs, 32, 16, 16)
+        lstm_out, (h_n, c_n) = self.lstm(encoder_out.view(T, bs, -1), (h_0, c_0))
+        lstm_out = lstm_out.view(T, bs, C, W, H)
 
-        # shape of decoder_out: (39, bs, 16, 256, 256)
+        # shape of decoder_out: (T, bs, 2, 256, 256)
         # shape of flow: (39, bs, 2, 256, 256)
-        Y = [self.flow(self.unet(lstm_out[i], 'decode', X_history[i])).unsqueeze(0) for i in range(T)]
+        Y = [self.unet(lstm_out[i], 'decode', X_history[i]).unsqueeze(0) for i in range(T)]
+        # Y = [self.flow(self.unet(lstm_out[i], 'decode', X_history[i])).unsqueeze(0) for i in range(T)]
         flow = torch.cat(Y, dim=0)
 
         # shape of moved_images = (39, bs, 1, 256, 256)
