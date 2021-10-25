@@ -24,3 +24,15 @@ pip install -r requirements.txt
 pip install ./pystrum
 pip install ./neurite
 ```
+
+## Train:
+
+```
+python -m api.train -id=<name or number of the run> -device=<'cuda' or 'cpu> -epochs=<epochs>
+```
+
+## Evaluation:
+  
+```
+python -m api.evaluate -id=<name or number of the train run> -snapshot=<name of the snapshot file> -device=<'cuda' or 'cpu>
+```
