@@ -376,6 +376,7 @@ for epoch in range(args.initial_epoch, args.epochs):
         }
         all_metrics.append(metrics)
 
+    # test for branch kian
     # print epoch info
     loss_history.append(epoch_loss)
     msg = 'epoch %d/%d, ' % (epoch + 1, args.epochs)
