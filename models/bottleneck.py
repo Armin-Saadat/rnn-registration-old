@@ -12,18 +12,15 @@ class Bottleneck(nn.Module):
         self.ndims = len(image_size)
 
         enc_nf = [16, 32, 32, 32, 64]
-        dec_nf = [32, 32, 32, 32, 32, 16, 16, 8, 2]
+        dec_nf = [64, 32, 32, 32, 32, 16, 16, 8, 2]
         self.unet = Unet2(inshape=image_size, infeats=2, nb_features=[enc_nf, dec_nf])
 
         C = enc_nf[-1]
-        W = image_size[0] / (2 ** len(enc_nf))
-        H = image_size[1] / (2 ** len(enc_nf))
+        W = image_size[0] // (2 ** len(enc_nf))
+        H = image_size[1] // (2 ** len(enc_nf))
         self.input_size = C * W * H
         self.hidden_size = C * W * H
         self.lstm = nn.LSTM(input_size=self.input_size, hidden_size=self.hidden_size, batch_first=False)
-
-        Conv = getattr(nn, 'Conv%dd' % self.ndims)
-        self.flow = Conv(self.unet.final_nf, self.ndims, kernel_size=3, padding=1)
 
         self.spatial_transformer = SpatialTransformer(size=image_size)
 
@@ -50,9 +47,7 @@ class Bottleneck(nn.Module):
         lstm_out = lstm_out.view(T, bs, C, W, H)
 
         # shape of decoder_out: (T, bs, 2, 256, 256)
-        # shape of flow: (39, bs, 2, 256, 256)
         Y = [self.unet(lstm_out[i], 'decode', X_history[i]).unsqueeze(0) for i in range(T)]
-        # Y = [self.flow(self.unet(lstm_out[i], 'decode', X_history[i])).unsqueeze(0) for i in range(T)]
         flow = torch.cat(Y, dim=0)
 
         # shape of moved_images = (39, bs, 1, 256, 256)
