@@ -31,8 +31,14 @@ pip install ./neurite
 python -m api.train -id=<folder-name of the run> -device=<device> -epochs=<epochs>
 ```
 
-## Evaluation:
+## Evaluate:
   
 ```
 python -m api.evaluate -id=<folder-name of the run> -snapshot=<name of the snapshot file> -device=<device>
+```
+
+## Visualize:
+  
+```
+python -m api.visualize -id=<folder-name of the run> -snapshot=<name of the snapshot file> -patient_idx=<p_idx> -slices=<'[10, 15, 20]'>
 ```
