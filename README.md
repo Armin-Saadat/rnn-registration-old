@@ -40,5 +40,5 @@ python -m api.evaluate -id=<folder-name of the run> -snapshot=<name of the snaps
 ## Visualize:
   
 ```
-python -m api.visualize -id=<folder-name> -snapshot=<file-name> -patient_idx=<p_idx> -slices=<'[10, 15, 20]'>
+python -m api.visualize -id=<folder-name> -snapshot=<file-name> -patient_idx=<p_idx> -slices=<'[s1, s2, ...]'>
 ```
