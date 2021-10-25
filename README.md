@@ -19,6 +19,7 @@ source myenv/bin/activate
 ```
 And install the dependencies:
 ```
+pip install --upgrade pip  
 pip install -r requirements.txt
 pip install ./pystrum
 pip install ./neurite
